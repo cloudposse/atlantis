@@ -110,7 +110,7 @@ func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 	if w.TestingOverrideCloneURL != "" {
 		cloneURL = w.TestingOverrideCloneURL
 	}
-	cloneCmd := exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
+	cloneCmd := exec.Command("git", "clone", "--recurse-submodules", cloneURL, cloneDir) // #nosec
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		return "", errors.Wrapf(err, "cloning %s: %s", headRepo.SanitizedCloneURL, string(output))
 	}
