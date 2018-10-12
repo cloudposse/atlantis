@@ -14,7 +14,7 @@
 package events
 
 import (
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 // ProjectResult is the result of executing a plan/apply for a specific project.

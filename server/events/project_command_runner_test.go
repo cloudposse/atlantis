@@ -18,15 +18,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/mocks"
+	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
+	"github.com/cloudposse/atlantis/server/events/models"
+	mocks2 "github.com/cloudposse/atlantis/server/events/runtime/mocks"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
+	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/mocks"
-	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
-	"github.com/runatlantis/atlantis/server/events/models"
-	mocks2 "github.com/runatlantis/atlantis/server/events/runtime/mocks"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestDefaultProjectCommandRunner_Plan(t *testing.T) {

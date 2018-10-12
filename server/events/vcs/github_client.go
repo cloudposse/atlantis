@@ -20,9 +20,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/google/go-github/github"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // maxCommentBodySize is derived from the error message when you go over

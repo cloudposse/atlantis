@@ -14,7 +14,7 @@
 package vcs
 
 import (
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_proxy.go ClientProxy

@@ -5,9 +5,9 @@ package runtime
 import (
 	"fmt"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 type TerraformExec interface {

@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/locking"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/vcs"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/gorilla/mux"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/locking"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/vcs"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // LocksController handles all requests relating to Atlantis locks.

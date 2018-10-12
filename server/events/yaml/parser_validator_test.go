@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/yaml"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/yaml"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestReadConfig_DirDoesNotExist(t *testing.T) {

@@ -6,9 +6,9 @@ package mocks
 import (
 	"reflect"
 
+	locking "github.com/cloudposse/atlantis/server/events/locking"
+	models "github.com/cloudposse/atlantis/server/events/models"
 	pegomock "github.com/petergtz/pegomock"
-	locking "github.com/runatlantis/atlantis/server/events/locking"
-	models "github.com/runatlantis/atlantis/server/events/models"
 )
 
 type MockLocker struct {

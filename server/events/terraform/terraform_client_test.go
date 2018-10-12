@@ -16,9 +16,9 @@ package terraform_test
 import (
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/terraform"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/terraform"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestMustConstraint_PancisOnBadConstraint(t *testing.T) {

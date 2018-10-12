@@ -17,8 +17,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/lkysow/go-gitlab"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 type GitlabClient struct {

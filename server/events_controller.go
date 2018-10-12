@@ -18,15 +18,15 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/vcs"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/google/go-github/github"
 	"github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/vcs"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 const githubHeader = "X-Github-Event"

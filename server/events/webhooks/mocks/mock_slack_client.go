@@ -6,8 +6,8 @@ package mocks
 import (
 	"reflect"
 
+	webhooks "github.com/cloudposse/atlantis/server/events/webhooks"
 	pegomock "github.com/petergtz/pegomock"
-	webhooks "github.com/runatlantis/atlantis/server/events/webhooks"
 )
 
 type MockSlackClient struct {

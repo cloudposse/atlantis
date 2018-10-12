@@ -3,8 +3,8 @@ package matchers
 import (
 	"reflect"
 
+	valid "github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/petergtz/pegomock"
-	valid "github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 func AnyValidConfig() valid.Config {

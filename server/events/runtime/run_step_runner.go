@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // RunStepRunner runs custom commands.

@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // Repo is a VCS repository.

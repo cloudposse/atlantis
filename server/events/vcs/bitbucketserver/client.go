@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
 	"gopkg.in/go-playground/validator.v9"
 )
 

@@ -13,7 +13,7 @@
 
 package fixtures
 
-import "github.com/runatlantis/atlantis/server/events/models"
+import "github.com/cloudposse/atlantis/server/events/models"
 
 var Pull = models.PullRequest{
 	Num:        1,
