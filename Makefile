@@ -87,8 +87,8 @@ end-to-end-tests: ## Run e2e tests
 website-dev:
 	yarn website:dev
 
-go-get:
+go/get:
 	go get
 
-go-build:
+go/build:
 	CGO_ENABLED=0 go build -v -o "./dist/bin/atlantis" *.go
