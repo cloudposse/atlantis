@@ -11,3 +11,5 @@ node_modules/
 **/.vuepress/dist
 helm/test-values.yaml
 dist/
+build-harness
+.build-harness

@@ -4,6 +4,11 @@ PKG := $(shell go list ./... | grep -v e2e | grep -v vendor | grep -v static | g
 PKG_COMMAS := $(shell go list ./... | grep -v e2e | grep -v vendor | grep -v static | grep -v mocks | grep -v testing | tr '\n' ',')
 IMAGE_NAME := runatlantis/atlantis
 
+SHELL = /bin/bash
+PATH:=$(PATH):$(GOPATH)/bin
+
+-include $(shell curl -sSL -o .build-harness "https://git.io/build-harness"; echo .build-harness)
+
 .PHONY: test
 
 .DEFAULT_GOAL := help
