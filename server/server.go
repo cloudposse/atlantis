@@ -90,6 +90,7 @@ type UserConfig struct {
 	BitbucketWebhookSecret string `mapstructure:"bitbucket-webhook-secret"`
 	DataDir                string `mapstructure:"data-dir"`
 	GithubHostname         string `mapstructure:"gh-hostname"`
+	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
 	GithubToken            string `mapstructure:"gh-token"`
 	GithubUser             string `mapstructure:"gh-user"`
 	GithubWebhookSecret    string `mapstructure:"gh-webhook-secret"`
@@ -306,6 +307,10 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	githubTeamWhitelistChecker, err := events.NewTeamWhitelistChecker(userConfig.GithubTeamWhitelist)
+	if err != nil {
+		return nil, err
+	}
 	locksController := &LocksController{
 		AtlantisVersion:    config.AtlantisVersion,
 		Locker:             lockingClient,
@@ -323,6 +328,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		Logger:                       logger,
 		GithubWebhookSecret:          []byte(userConfig.GithubWebhookSecret),
 		GithubRequestValidator:       &DefaultGithubRequestValidator{},
+		TeamWhitelistChecker:         githubTeamWhitelistChecker,
 		GitlabRequestParserValidator: &DefaultGitlabRequestParserValidator{},
 		GitlabWebhookSecret:          []byte(userConfig.GitlabWebhookSecret),
 		RepoWhitelistChecker:         repoWhitelist,

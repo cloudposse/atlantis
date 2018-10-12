@@ -103,3 +103,8 @@ func (g *GitlabClient) GetMergeRequest(repoFullName string, pullNum int) (*gitla
 	mr, _, err := g.Client.MergeRequests.GetMergeRequest(repoFullName, pullNum)
 	return mr, err
 }
+
+// GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
+func (g *GitlabClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, nil
+}
