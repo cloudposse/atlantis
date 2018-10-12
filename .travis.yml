@@ -22,7 +22,6 @@ install:
 - make go/deps-dev
 
 script:
-- make go/lint
 - make go/build-all
 - ls -l release/
 - make docker/build
