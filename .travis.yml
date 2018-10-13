@@ -22,7 +22,6 @@ install:
 
 script:
 - make go/build/local
-- ls -l release/
 - make docker/build
 
 after_success:
