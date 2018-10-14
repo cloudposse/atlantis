@@ -11,7 +11,6 @@ addons:
 
 env:
 - DOCKER_IMAGE_NAME=cloudposse/atlantis
-- RELEASE_ARCH="windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64"
 
 services:
 - docker
@@ -23,7 +22,7 @@ install:
 
 script:
 - make go/build/local
-- make go/build-all
+- gox -osarch="windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64" -output "release/atlantis_{{.OS}}_{{.Arch}}"
 - ls -l release/
 - make docker/build
 
