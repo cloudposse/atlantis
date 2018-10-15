@@ -19,9 +19,9 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server"
+	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestValidate_WithSecretErr(t *testing.T) {

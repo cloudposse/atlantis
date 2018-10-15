@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/gorilla/mux"
-	"github.com/runatlantis/atlantis/server"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRouter_GenerateLockURL(t *testing.T) {

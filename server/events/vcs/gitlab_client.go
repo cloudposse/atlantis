@@ -17,8 +17,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/lkysow/go-gitlab"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 type GitlabClient struct {
@@ -102,4 +102,9 @@ func (g *GitlabClient) UpdateStatus(repo models.Repo, pull models.PullRequest, s
 func (g *GitlabClient) GetMergeRequest(repoFullName string, pullNum int) (*gitlab.MergeRequest, error) {
 	mr, _, err := g.Client.MergeRequests.GetMergeRequest(repoFullName, pullNum)
 	return mr, err
+}
+
+// GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
+func (g *GitlabClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, nil
 }

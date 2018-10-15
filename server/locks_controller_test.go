@@ -8,16 +8,16 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server"
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/locking/mocks"
+	mocks2 "github.com/cloudposse/atlantis/server/events/mocks"
+	"github.com/cloudposse/atlantis/server/events/models"
+	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
+	"github.com/cloudposse/atlantis/server/logging"
+	sMocks "github.com/cloudposse/atlantis/server/mocks"
 	"github.com/gorilla/mux"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/locking/mocks"
-	mocks2 "github.com/runatlantis/atlantis/server/events/mocks"
-	"github.com/runatlantis/atlantis/server/events/models"
-	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
-	"github.com/runatlantis/atlantis/server/logging"
-	sMocks "github.com/runatlantis/atlantis/server/mocks"
 )
 
 func AnyRepo() models.Repo {

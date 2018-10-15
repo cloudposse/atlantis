@@ -17,7 +17,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/urfave/negroni"
 )
 

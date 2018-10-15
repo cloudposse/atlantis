@@ -20,10 +20,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudposse/atlantis/cmd"
+	"github.com/cloudposse/atlantis/server"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/mitchellh/go-homedir"
-	"github.com/runatlantis/atlantis/cmd"
-	"github.com/runatlantis/atlantis/server"
-	. "github.com/runatlantis/atlantis/testing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

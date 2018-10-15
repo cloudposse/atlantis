@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRunStepRunner_Run(t *testing.T) {

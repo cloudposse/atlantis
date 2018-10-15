@@ -16,7 +16,7 @@ package vcs
 import (
 	"fmt"
 
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 // NotConfiguredVCSClient is used as a placeholder when Atlantis isn't configured
@@ -37,6 +37,9 @@ func (a *NotConfiguredVCSClient) PullIsApproved(repo models.Repo, pull models.Pu
 }
 func (a *NotConfiguredVCSClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, description string) error {
 	return a.err()
+}
+func (a *NotConfiguredVCSClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, a.err()
 }
 func (a *NotConfiguredVCSClient) err() error {
 	//noinspection GoErrorStringFormat

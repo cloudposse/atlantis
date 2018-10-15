@@ -3,8 +3,8 @@ package matchers
 import (
 	"reflect"
 
+	locking "github.com/cloudposse/atlantis/server/events/locking"
 	"github.com/petergtz/pegomock"
-	locking "github.com/runatlantis/atlantis/server/events/locking"
 )
 
 func AnyLockingTryLockResponse() locking.TryLockResponse {

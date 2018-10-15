@@ -6,9 +6,9 @@ package mocks
 import (
 	"reflect"
 
+	logging "github.com/cloudposse/atlantis/server/logging"
 	go_version "github.com/hashicorp/go-version"
 	pegomock "github.com/petergtz/pegomock"
-	logging "github.com/runatlantis/atlantis/server/logging"
 )
 
 type MockClient struct {

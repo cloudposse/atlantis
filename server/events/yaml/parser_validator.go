@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/raw"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/go-ozzo/ozzo-validation"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/yaml/raw"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 	"gopkg.in/yaml.v2"
 )
 

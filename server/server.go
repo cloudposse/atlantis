@@ -29,23 +29,23 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/locking"
+	"github.com/cloudposse/atlantis/server/events/locking/boltdb"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	"github.com/cloudposse/atlantis/server/events/terraform"
+	"github.com/cloudposse/atlantis/server/events/vcs"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
+	"github.com/cloudposse/atlantis/server/events/webhooks"
+	"github.com/cloudposse/atlantis/server/events/yaml"
+	"github.com/cloudposse/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/server/static"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/locking"
-	"github.com/runatlantis/atlantis/server/events/locking/boltdb"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	"github.com/runatlantis/atlantis/server/events/terraform"
-	"github.com/runatlantis/atlantis/server/events/vcs"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
-	"github.com/runatlantis/atlantis/server/events/webhooks"
-	"github.com/runatlantis/atlantis/server/events/yaml"
-	"github.com/runatlantis/atlantis/server/logging"
-	"github.com/runatlantis/atlantis/server/static"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 )
@@ -90,6 +90,7 @@ type UserConfig struct {
 	BitbucketWebhookSecret string `mapstructure:"bitbucket-webhook-secret"`
 	DataDir                string `mapstructure:"data-dir"`
 	GithubHostname         string `mapstructure:"gh-hostname"`
+	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
 	GithubToken            string `mapstructure:"gh-token"`
 	GithubUser             string `mapstructure:"gh-user"`
 	GithubWebhookSecret    string `mapstructure:"gh-webhook-secret"`
@@ -306,6 +307,10 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	githubTeamWhitelistChecker, err := events.NewTeamWhitelistChecker(userConfig.GithubTeamWhitelist)
+	if err != nil {
+		return nil, err
+	}
 	locksController := &LocksController{
 		AtlantisVersion:    config.AtlantisVersion,
 		Locker:             lockingClient,
@@ -323,6 +328,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		Logger:                       logger,
 		GithubWebhookSecret:          []byte(userConfig.GithubWebhookSecret),
 		GithubRequestValidator:       &DefaultGithubRequestValidator{},
+		TeamWhitelistChecker:         githubTeamWhitelistChecker,
 		GitlabRequestParserValidator: &DefaultGitlabRequestParserValidator{},
 		GitlabWebhookSecret:          []byte(userConfig.GitlabWebhookSecret),
 		RepoWhitelistChecker:         repoWhitelist,

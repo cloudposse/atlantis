@@ -16,7 +16,7 @@ package vcs
 import (
 	"testing"
 
-	. "github.com/runatlantis/atlantis/testing"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 func TestSplitAtMaxChars(t *testing.T) {

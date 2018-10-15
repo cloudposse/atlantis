@@ -20,16 +20,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/mocks"
+	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models/fixtures"
+	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
+	logmocks "github.com/cloudposse/atlantis/server/logging/mocks"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/google/go-github/github"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/mocks"
-	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/models/fixtures"
-	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
-	logmocks "github.com/runatlantis/atlantis/server/logging/mocks"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 var projectCommandBuilder *mocks.MockProjectCommandBuilder

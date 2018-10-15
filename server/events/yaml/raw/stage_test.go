@@ -3,10 +3,10 @@ package raw_test
 import (
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/raw"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/go-ozzo/ozzo-validation"
-	"github.com/runatlantis/atlantis/server/events/yaml/raw"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	. "github.com/runatlantis/atlantis/testing"
 	"gopkg.in/yaml.v2"
 )
 

@@ -14,7 +14,7 @@
 package vcs
 
 import (
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_proxy.go ClientProxy
@@ -26,6 +26,7 @@ type ClientProxy interface {
 	CreateComment(repo models.Repo, pullNum int, comment string) error
 	PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error)
 	UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, description string) error
+	GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error)
 }
 
 // DefaultClientProxy proxies calls to the correct VCS client depending on which
@@ -73,4 +74,8 @@ func (d *DefaultClientProxy) PullIsApproved(repo models.Repo, pull models.PullRe
 
 func (d *DefaultClientProxy) UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, description string) error {
 	return d.clients[repo.VCSHost.Type].UpdateStatus(repo, pull, state, description)
+}
+
+func (d *DefaultClientProxy) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return d.clients[repo.VCSHost.Type].GetTeamNamesForUser(repo, user)
 }

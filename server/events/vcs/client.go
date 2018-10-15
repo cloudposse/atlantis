@@ -14,7 +14,7 @@
 package vcs
 
 import (
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_client.go Client
@@ -25,4 +25,5 @@ type Client interface {
 	CreateComment(repo models.Repo, pullNum int, comment string) error
 	PullIsApproved(repo models.Repo, pull models.PullRequest) (bool, error)
 	UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, description string) error
+	GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error)
 }

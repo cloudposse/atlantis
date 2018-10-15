@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // ApplyStepRunner runs `terraform apply`.

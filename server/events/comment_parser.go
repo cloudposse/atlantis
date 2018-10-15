@@ -21,8 +21,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/yaml"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/yaml"
 	"github.com/spf13/pflag"
 )
 

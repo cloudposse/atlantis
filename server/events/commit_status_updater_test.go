@@ -18,11 +18,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/vcs/mocks"
+	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/vcs/mocks"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 var repoModel = models.Repo{}

@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/flynn-archive/go-shlex"
 	"github.com/go-ozzo/ozzo-validation"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 const (

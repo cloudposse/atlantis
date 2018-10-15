@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/hashicorp/go-version"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 const defaultWorkspace = "default"

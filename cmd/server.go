@@ -20,10 +20,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
 	"github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -44,6 +44,7 @@ const (
 	ConfigFlag                 = "config"
 	DataDirFlag                = "data-dir"
 	GHHostnameFlag             = "gh-hostname"
+	GHTeamWhitelistFlag        = "gh-team-whitelist"
 	GHTokenFlag                = "gh-token"
 	GHUserFlag                 = "gh-user"
 	GHWebhookSecretFlag        = "gh-webhook-secret" // nolint: gosec
@@ -62,6 +63,7 @@ const (
 	DefaultBitbucketBaseURL = bitbucketcloud.BaseURL
 	DefaultDataDir          = "~/.atlantis"
 	DefaultGHHostname       = "github.com"
+	DefaultGHTeamWhitelist  = "*:*"
 	DefaultGitlabHostname   = "gitlab.com"
 	DefaultLogLevel         = "info"
 	DefaultPort             = 4141
@@ -110,6 +112,15 @@ var stringFlags = []stringFlag{
 		name:         GHHostnameFlag,
 		description:  "Hostname of your Github Enterprise installation. If using github.com, no need to set.",
 		defaultValue: DefaultGHHostname,
+	},
+	{
+		name: GHTeamWhitelistFlag,
+		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that the members of a particular team are allowed to perform. " +
+			"The format is {team}:{command},{team}:{command}, ex. dev:plan,ops:apply,devops:*. " +
+			"This example means to give the users from the 'dev' GitHub team the permissions to execute the 'plan' command, give the 'ops' team the permissions to execute the 'apply' command, " +
+			"and allow the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) will be used and the default behavior will be to not check permissions " +
+			"and to allow users from any team to perform any operation.",
+		defaultValue: DefaultGHTeamWhitelist,
 	},
 	{
 		name:        GHUserFlag,
@@ -364,6 +375,9 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	}
 	if c.Port == 0 {
 		c.Port = DefaultPort
+	}
+	if c.GithubTeamWhitelist == "" {
+		c.GithubTeamWhitelist = DefaultGHTeamWhitelist
 	}
 }
 

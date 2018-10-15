@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
 	"gopkg.in/go-playground/validator.v9"
 )
 
@@ -219,4 +219,9 @@ func (b *Client) makeRequest(method string, path string, reqBody io.Reader) ([]b
 		return nil, errors.Wrapf(err, "reading response from request %q", requestStr)
 	}
 	return respBody, nil
+}
+
+// GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
+func (g *Client) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, nil
 }

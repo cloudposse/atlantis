@@ -19,13 +19,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	"github.com/cloudposse/atlantis/server/events/webhooks"
+	"github.com/cloudposse/atlantis/server/events/yaml/raw"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	"github.com/runatlantis/atlantis/server/events/webhooks"
-	"github.com/runatlantis/atlantis/server/events/yaml/raw"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_lock_url_generator.go LockURLGenerator

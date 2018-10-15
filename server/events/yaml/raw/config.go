@@ -3,8 +3,8 @@ package raw
 import (
 	"errors"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/go-ozzo/ozzo-validation"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 // Config is the representation for the whole config file at the top level.

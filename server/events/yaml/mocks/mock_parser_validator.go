@@ -6,8 +6,8 @@ package mocks
 import (
 	"reflect"
 
+	valid "github.com/cloudposse/atlantis/server/events/yaml/valid"
 	pegomock "github.com/petergtz/pegomock"
-	valid "github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 type MockParserValidator struct {

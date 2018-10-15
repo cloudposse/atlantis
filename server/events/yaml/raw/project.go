@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/go-ozzo/ozzo-validation"
 	"github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 const (
