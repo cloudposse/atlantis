@@ -18,26 +18,29 @@ export DOCKER_BUILD_FLAGS =
 .PHONY: test
 
 .DEFAULT_GOAL := help
-help: ## List targets & descriptions
-	@cat Makefile* | grep -E '^[a-zA-Z_-]+:.*?## .*$$' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-id: ## Output BUILD_ID being used
+## Output BUILD_ID being used
+id: 
 	@echo $(BUILD_ID)
 
-debug: ## Output internal make variables
+## Output internal make variables
+debug: 
 	@echo BUILD_ID = $(BUILD_ID)
 	@echo IMAGE_NAME = $(IMAGE_NAME)
 	@echo WORKSPACE = $(WORKSPACE)
 	@echo PKG = $(PKG)
 
-deps: ## Download dependencies
+## Download dependencies
+deps: 
 	go get -u github.com/golang/dep/cmd/dep
 	dep ensure
 
-build-service: ## Build the main Go service
+## Build the main Go service
+build-service: 
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o atlantis .
 
-go-generate: ## Run go generate in all packages
+## Run go generate in all packages
+go-generate: 
 	go generate $(PKG)
 
 #regen-mocks: ## Delete all mocks and matchers and then run go generate to regen them. This doesn't work anymore.
@@ -47,10 +50,12 @@ go-generate: ## Run go generate in all packages
 #@# been deleted, causing go generate to fail.
 #echo "this doesn't work anymore: go generate \$\$(go list ./... | grep -v e2e | grep -v vendor | grep -v static)"
 
-test: ## Run tests
+## Run tests
+test: 
 	@go test -short $(PKG)
 
-test-all: ## Run tests including integration
+## Run tests including integration
+test-all:
 	@go test $(PKG)
 
 test-coverage:
@@ -62,16 +67,20 @@ test-coverage-html:
 	@go test -coverpkg $(PKG_COMMAS) -coverprofile .cover/cover.out $(PKG)
 	go tool cover -html .cover/cover.out
 
-dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
+## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
+dist: 
 	rm -f server/static/bindata_assetfs.go && go-bindata-assetfs -pkg static -prefix server server/static/... && mv bindata_assetfs.go server/static
 
-release: ## Create packages for a release
+## Create packages for a release
+release: 
 	./scripts/binary-release.sh
 
-fmt: ## Run goimports (which also formats)
+## Run goimports (which also formats)
+fmt: 
 	goimports -w $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/static/bindata_assetfs.go" ! -path "**/mocks/*")
 
-gometalint: ## Run every linter ever
+## Run every linter ever
+gometalint: 
 	# gotype and gotypex are disabled because they don't pass on CI and https://github.com/alecthomas/gometalinter/issues/206
 	# maligned is disabled because I'd rather have alphabetical struct fields than save a few bytes
 	# gocyclo is temporarily disabled because we don't pass it right now
@@ -79,20 +88,24 @@ gometalint: ## Run every linter ever
 	# CGO_ENABLED=0 is attempted workaround for https://github.com/alecthomas/gometalinter/issues/149
 	CGO_ENABLED=0 gometalinter --config=.gometalinter.json ./...
 
-gometalint-install: ## Install gometalint
+## Install gometalint
+gometalint-install: 
 	go get -u github.com/alecthomas/gometalinter
 	gometalinter --install
 
 check-gometalint: gometalint-install gometalint
 
-check-fmt: ## Fail if not formatted
+## Fail if not formatted
+check-fmt: 
 	go get golang.org/x/tools/cmd/goimports
 	goimports -d $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/static/bindata_assetfs.go" ! -path "**/mocks/*")
 
-end-to-end-deps: ## Install e2e dependencies
+## Install e2e dependencies
+end-to-end-deps: 
 	./scripts/e2e-deps.sh
 
-end-to-end-tests: ## Run e2e tests
+## Run e2e tests
+end-to-end-tests:
 	./scripts/e2e.sh
 
 website-dev:
