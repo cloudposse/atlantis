@@ -17,9 +17,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/Masterminds/semver"
 	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
@@ -89,6 +91,40 @@ func (w *FileWorkspace) Clone(
 	return w.forceClone(log, cloneDir, headRepo, p)
 }
 
+// GetGitVersion finds git version on the workstation
+func GetGitVersion() (*semver.Version, error) {
+	gitVersionOutput, err := exec.Command("git", "version").CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+	r := regexp.MustCompile(`(?:git version)\s(\d+\.\d+\.\d+)`)
+	gitVersion := semver.MustParse(r.FindStringSubmatch(string(gitVersionOutput))[1])
+	return gitVersion, nil
+}
+
+// CreateGitCloneCommand checks git version and creates 'git clone' command with different arguments depending on git version
+// https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules/4438292#4438292
+func CreateGitCloneCommand(gitVersion *semver.Version, cloneURL string, cloneDir string) (*exec.Cmd, error) {
+	minimalGitVersion165, err := semver.NewConstraint(">= 1.6.5")
+	if err != nil {
+		return nil, errors.Wrap(err, "creating semver constraint for git version >= 1.6.5")
+	}
+	minimalGitVersion213, err := semver.NewConstraint(">= 2.13")
+	if err != nil {
+		return nil, errors.Wrap(err, "creating semver constraint for git version >= 2.13")
+	}
+
+	var cloneCmd *exec.Cmd
+	if minimalGitVersion213.Check(gitVersion) {
+		cloneCmd = exec.Command("git", "clone", "--recurse-submodules", cloneURL, cloneDir) // #nosec
+	} else if minimalGitVersion165.Check(gitVersion) {
+		cloneCmd = exec.Command("git", "clone", "--recursive", cloneURL, cloneDir) // #nosec
+	} else {
+		cloneCmd = exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
+	}
+	return cloneCmd, nil
+}
+
 func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 	cloneDir string,
 	headRepo models.Repo,
@@ -110,7 +146,17 @@ func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 	if w.TestingOverrideCloneURL != "" {
 		cloneURL = w.TestingOverrideCloneURL
 	}
-	cloneCmd := exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
+
+	gitVersion, err := GetGitVersion()
+	if err != nil {
+		return "", errors.Wrap(err, "git version")
+	}
+
+	cloneCmd, err := CreateGitCloneCommand(gitVersion, cloneURL, cloneDir)
+	if err != nil {
+		return "", err
+	}
+
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		return "", errors.Wrapf(err, "cloning %s: %s", headRepo.SanitizedCloneURL, string(output))
 	}

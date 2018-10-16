@@ -74,6 +74,10 @@ func (mock *MockClientProxy) UpdateStatus(repo models.Repo, pull models.PullRequ
 	return ret0
 }
 
+func (mock *MockClientProxy) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, nil
+}
+
 func (mock *MockClientProxy) VerifyWasCalledOnce() *VerifierClientProxy {
 	return &VerifierClientProxy{mock, pegomock.Times(1), nil}
 }
