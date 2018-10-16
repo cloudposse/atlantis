@@ -51,7 +51,7 @@ Atlantis injects 5 Terraform variables that can be used to dynamically name the 
 Setting the `session_name` allows you to trace API calls made through Atlantis back to a specific
 user and repo via CloudWatch:
 
-```bash
+```hcl
 provider "aws" {
   assume_role {
     role_arn     = "arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME"
@@ -72,7 +72,7 @@ Atlantis runs `terraform` with the following variables:
 If you want to use `assume_role` with Atlantis and you're also using the [S3 Backend](https://www.terraform.io/docs/backends/types/s3.html),
 make sure to add the `role_arn` option:
 
-```bash
+```hcl
 terraform {
   backend "s3" {
     bucket   = "mybucket"
@@ -85,3 +85,13 @@ terraform {
   }
 }
 ```
+
+## Running Multiple Atlantis Servers Against The Same Repo
+
+A common use case is to have separate production and staging Atlantis servers. 
+
+You can achieve this by using multiple atlantis.yaml config files in the same repo and setting the `--repo-config` flag on each server. 
+
+This allows you to launch a staging Atlantis server pointing at a staging atlantis.yaml file (e.g. `--repo-config atlantis-staging.yaml`) and a production Atlantis server pointing at a production atlantis.yaml file in the same repo (e.g. `--repo-config atlantis-production.yaml`).
+
+This way you can use different credentials for staging and production and maintain cleaner separation between environments. 
