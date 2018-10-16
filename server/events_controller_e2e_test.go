@@ -328,6 +328,7 @@ func setupE2E(t *testing.T) (server.EventsController, *vcsmocks.MockClientProxy,
 			WorkingDirLocker:    locker,
 			AllowRepoConfigFlag: "allow-repo-config",
 			AllowRepoConfig:     true,
+			RepoConfig:          "atlantis.yaml",
 			PendingPlanFinder:   &events.PendingPlanFinder{},
 			CommentBuilder:      commentParser,
 		},
@@ -414,16 +415,16 @@ func GitHubPullRequestParsed(headSHA string) *github.PullRequest {
 		HTMLURL: github.String("htmlurl"),
 		Head: &github.PullRequestBranch{
 			Repo: &github.Repository{
-				FullName: github.String("runatlantis/atlantis-tests"),
-				CloneURL: github.String("/runatlantis/atlantis-tests.git"),
+				FullName: github.String("cloudposse/atlantis-tests"),
+				CloneURL: github.String("/cloudposse/atlantis-tests.git"),
 			},
 			SHA: github.String(headSHA),
 			Ref: github.String("branch"),
 		},
 		Base: &github.PullRequestBranch{
 			Repo: &github.Repository{
-				FullName: github.String("runatlantis/atlantis-tests"),
-				CloneURL: github.String("/runatlantis/atlantis-tests.git"),
+				FullName: github.String("cloudposse/atlantis-tests"),
+				CloneURL: github.String("/cloudposse/atlantis-tests.git"),
 			},
 		},
 		User: &github.User{
@@ -456,7 +457,7 @@ func initializeRepo(t *testing.T, repoDir string) (string, string, func()) {
 	runCmd(t, destDir, "git", "init")
 	runCmd(t, destDir, "touch", ".gitkeep")
 	runCmd(t, destDir, "git", "add", ".gitkeep")
-	runCmd(t, destDir, "git", "config", "--local", "user.email", "atlantisbot@runatlantis.io")
+	runCmd(t, destDir, "git", "config", "--local", "user.email", "atlantisbot@cloudposse.io")
 	runCmd(t, destDir, "git", "config", "--local", "user.name", "atlantisbot")
 	runCmd(t, destDir, "git", "commit", "-m", "initial commit")
 	runCmd(t, destDir, "git", "checkout", "-b", "branch")
