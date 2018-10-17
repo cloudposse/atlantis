@@ -28,6 +28,7 @@ var commentParser = events.CommentParser{
 	GithubToken: "github-token",
 	GitlabUser:  "gitlab-user",
 	GitlabToken: "gitlab-token",
+	WakeWord:    "atlantis",
 }
 
 func TestParse_Ignored(t *testing.T) {
@@ -141,8 +142,8 @@ func TestParse_DidYouMeanAtlantis(t *testing.T) {
 	}
 	for _, c := range comments {
 		r := commentParser.Parse(c, models.Github)
-		Assert(t, r.CommentResponse == events.DidYouMeanAtlantisComment,
-			"For comment %q expected CommentResponse==%q but got %q", c, events.DidYouMeanAtlantisComment, r.CommentResponse)
+		Assert(t, r.CommentResponse == commentParser.GetDidYouMeanWakeWordComment(),
+			"For comment %q expected CommentResponse==%q but got %q", c, commentParser.GetDidYouMeanWakeWordComment(), r.CommentResponse)
 	}
 }
 

@@ -34,7 +34,6 @@ const (
 	projectFlagShort   = "p"
 	verboseFlagLong    = "verbose"
 	verboseFlagShort   = ""
-	atlantisExecutable = "atlantis"
 )
 
 // multiLineRegex is used to ignore multi-line comments since those aren't valid
@@ -67,6 +66,7 @@ type CommentParser struct {
 	GithubToken string
 	GitlabUser  string
 	GitlabToken string
+	WakeWord    string
 }
 
 // CommentParseResult describes the result of parsing a comment as a command.
@@ -84,7 +84,7 @@ type CommentParseResult struct {
 // Parse parses the comment as an Atlantis command.
 //
 // Valid commands contain:
-// - The initial "executable" name, 'run' or 'atlantis' or '@GithubUser'
+// - The initial "executable" name or '@GithubUser'
 //   where GithubUser is the API user Atlantis is running as.
 // - Then a command, either 'plan', 'apply', or 'help'.
 // - Then optional flags, then an optional separator '--' followed by optional
@@ -111,7 +111,7 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 
 	// Helpfully warn the user if they're using "terraform" instead of "atlantis"
 	if args[0] == "terraform" {
-		return CommentParseResult{CommentResponse: DidYouMeanAtlantisComment}
+		return CommentParseResult{CommentResponse: e.GetDidYouMeanWakeWordComment()}
 	}
 
 	// Atlantis can be invoked using the name of the VCS host user we're
@@ -120,7 +120,7 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 	if vcsHost == models.Gitlab {
 		vcsUser = e.GitlabUser
 	}
-	executableNames := []string{"run", atlantisExecutable, "@" + vcsUser}
+	executableNames := []string{e.WakeWord, "@" + vcsUser}
 
 	// If the comment doesn't start with the name of our 'executable' then
 	// ignore it.
@@ -245,13 +245,13 @@ func (e *CommentParser) BuildPlanComment(repoRelDir string, workspace string, pr
 		}
 		commentFlags = fmt.Sprintf(" -- %s", strings.Join(flagsWithoutQuotes, " "))
 	}
-	return fmt.Sprintf("%s %s%s%s", atlantisExecutable, PlanCommand.String(), flags, commentFlags)
+	return fmt.Sprintf("%s %s%s%s", e.WakeWord, PlanCommand.String(), flags, commentFlags)
 }
 
 // BuildApplyComment builds an apply comment for the specified args.
 func (e *CommentParser) BuildApplyComment(repoRelDir string, workspace string, project string) string {
 	flags := e.buildFlags(repoRelDir, workspace, project)
-	return fmt.Sprintf("%s %s%s", atlantisExecutable, ApplyCommand.String(), flags)
+	return fmt.Sprintf("%s %s%s", e.WakeWord, ApplyCommand.String(), flags)
 }
 
 func (e *CommentParser) buildFlags(repoRelDir string, workspace string, project string) string {
@@ -338,6 +338,8 @@ Flags:
 Use "atlantis [command] --help" for more information about a command.
 `
 
-// DidYouMeanAtlantisComment is the comment we add to the pull request when
-// someone runs a command with terraform instead of atlantis.
-var DidYouMeanAtlantisComment = "Did you mean to use `atlantis` instead of `terraform`?"
+// GetDidYouMeanWakeWordComment is the comment we add to the pull request when
+// someone runs a command with terraform instead of the specified wake word.
+func (e *CommentParser) GetDidYouMeanWakeWordComment() string {
+	return fmt.Sprintf("Did you mean to use `%s` instead of `terraform`?", e.WakeWord)
+}
