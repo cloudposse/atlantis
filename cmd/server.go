@@ -59,6 +59,7 @@ const (
 	RequireApprovalFlag        = "require-approval"
 	SSLCertFileFlag            = "ssl-cert-file"
 	SSLKeyFileFlag             = "ssl-key-file"
+	WakeWordFlag               = "wake-word"
 
 	// Flag defaults.
 	DefaultBitbucketBaseURL = bitbucketcloud.BaseURL
@@ -69,6 +70,7 @@ const (
 	DefaultLogLevel         = "info"
 	DefaultPort             = 4141
 	DefaultRepoConfig       = "atlantis.yaml"
+	DefaultWakeWord         = "atlantis"
 )
 
 const redTermStart = "\033[31m"
@@ -169,7 +171,8 @@ var stringFlags = []stringFlag{
 		description: "Optional path to the Atlantis YAML config file contained in each repo that this server should use. " +
 			"This allows different Atlantis servers to point at different configs in the same repo.",
 		defaultValue: DefaultRepoConfig,
-	}, {
+	},
+	{
 		name: RepoWhitelistFlag,
 		description: "Comma separated list of repositories that Atlantis will operate on. " +
 			"The format is {hostname}/{owner}/{repo}, ex. github.com/runatlantis/atlantis. '*' matches any characters until the next comma and can be used for example to whitelist " +
@@ -183,6 +186,12 @@ var stringFlags = []stringFlag{
 	{
 		name:        SSLKeyFileFlag,
 		description: fmt.Sprintf("File containing x509 private key matching --%s.", SSLCertFileFlag),
+	},
+	{
+		name: WakeWordFlag,
+		description: "Wake word for this server to listen to. Default is 'atlantis'. " +
+			"This allows different wake commands (e.g. 'staging' or 'prod') to be used for different stages if more than one server operates on the same repo.",
+		defaultValue: DefaultWakeWord,
 	},
 }
 var boolFlags = []boolFlag{
@@ -388,6 +397,9 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	}
 	if c.RepoConfig == "" {
 		c.RepoConfig = DefaultRepoConfig
+	}
+	if c.WakeWord == "" {
+		c.WakeWord = DefaultWakeWord
 	}
 }
 

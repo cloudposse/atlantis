@@ -108,6 +108,7 @@ type UserConfig struct {
 	SlackToken      string          `mapstructure:"slack-token"`
 	SSLCertFile     string          `mapstructure:"ssl-cert-file"`
 	SSLKeyFile      string          `mapstructure:"ssl-key-file"`
+	WakeWord        string          `mapstructure:"wake-word"`
 	Webhooks        []WebhookConfig `mapstructure:"webhooks"`
 }
 
@@ -257,6 +258,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		GithubToken: userConfig.GithubToken,
 		GitlabUser:  userConfig.GitlabUser,
 		GitlabToken: userConfig.GitlabToken,
+		WakeWord:    userConfig.WakeWord,
 	}
 	defaultTfVersion := terraformClient.Version()
 	commandRunner := &events.DefaultCommandRunner{
