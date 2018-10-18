@@ -58,7 +58,7 @@ func TestParse_HelpResponse(t *testing.T) {
 	}
 	for _, c := range helpComments {
 		r := commentParser.Parse(c, models.Github)
-		Equals(t, events.HelpComment, r.CommentResponse)
+		Equals(t, commentParser.GetHelpComment(), r.CommentResponse)
 	}
 }
 

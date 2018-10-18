@@ -75,7 +75,7 @@ type CommentParseResult struct {
 	// CommentResponse or Ignore is set.
 	Command *CommentCommand
 	// CommentResponse is set when we should respond immediately to the command
-	// for example for atlantis help.
+	// for example for 'help'.
 	CommentResponse string
 	// Ignore is set to true when we should just ignore this comment.
 	Ignore bool
@@ -131,18 +131,19 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 	// If they've just typed the name of the executable then give them the help
 	// output.
 	if len(args) == 1 {
-		return CommentParseResult{CommentResponse: HelpComment}
+		return CommentParseResult{CommentResponse: e.GetHelpComment()}
 	}
 	command := args[1]
 
 	// Help output.
 	if e.stringInSlice(command, []string{"help", "-h", "--help"}) {
-		return CommentParseResult{CommentResponse: HelpComment}
+		return CommentParseResult{CommentResponse: e.GetHelpComment()}
 	}
 
 	// Need to have a plan or apply at this point.
 	if !e.stringInSlice(command, []string{PlanCommand.String(), ApplyCommand.String()}) {
-		return CommentParseResult{CommentResponse: fmt.Sprintf("```\nError: unknown command %q.\nRun 'atlantis --help' for usage.\n```", command)}
+		message := fmt.Sprintf("```\nError: unknown command %q.\nRun '%s --help' for usage.\n```", command, e.GetDidYouMeanWakeWordComment())
+		return CommentParseResult{CommentResponse: message}
 	}
 
 	var workspace string
@@ -306,24 +307,25 @@ func (e *CommentParser) errMarkdown(errMsg string, command string, flagSet *pfla
 	return fmt.Sprintf("```\nError: %s.\nUsage of %s:\n%s```", errMsg, command, flagSet.FlagUsagesWrapped(usagesCols))
 }
 
-// HelpComment is the comment we add to the pull request when someone runs
-// `atlantis help`.
-var HelpComment = "```cmake\n" +
-	`atlantis
+// GetHelpComment returns the comment we add to the pull request when someone runs
+//// the `help` command.
+func (e *CommentParser) GetHelpComment() string {
+	return fmt.Sprintf("```cmake\n"+
+		`atlantis
 Terraform For Teams
 
 Usage:
-  atlantis <command> [options] -- [terraform options]
+  %[1]s <command> [options] -- [terraform options]
 
 Examples:
   # run plan in the root directory passing the -target flag to terraform
-  atlantis plan -d . -- -target=resource
+  %[1]s plan -d . -- -target=resource
 
   # apply all unapplied plans from this pull request
-  atlantis apply
+  %[1]s apply
 
   # apply the plan for the root directory and staging workspace
-  atlantis apply -d . -w staging
+  %[1]s apply -d . -w staging
 
 Commands:
   plan   Runs 'terraform plan' for the changes in this pull request.
@@ -335,10 +337,11 @@ Commands:
 Flags:
   -h, --help   help for atlantis
 
-Use "atlantis [command] --help" for more information about a command.
-`
+Use "%[1]s [command] --help" for more information about a command.
+`, e.WakeWord)
+}
 
-// GetDidYouMeanWakeWordComment is the comment we add to the pull request when
+// GetDidYouMeanWakeWordComment returns the comment we add to the pull request when
 // someone runs a command with terraform instead of the specified wake word.
 func (e *CommentParser) GetDidYouMeanWakeWordComment() string {
 	return fmt.Sprintf("Did you mean to use `%s` instead of `terraform`?", e.WakeWord)
