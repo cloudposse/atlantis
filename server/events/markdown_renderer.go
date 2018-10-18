@@ -193,7 +193,7 @@ var singleProjectPlanSuccessTmpl = template.Must(template.New("").Parse(
 		"\n" +
 		"---\n" +
 		"* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `atlantis apply`" + logTmpl))
+		"    * `{{.ApplyCmd}}`" + logTmpl))
 var singleProjectPlanUnsuccessfulTmpl = template.Must(template.New("").Parse(
 	"{{$result := index .Results 0}}Ran {{.Command}} in dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n" +
 		"{{$result.Rendered}}\n" + logTmpl))
@@ -206,7 +206,7 @@ var multiProjectPlanTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap
 		"### {{add $i 1}}. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
 		"{{$result.Rendered}}\n\n" +
 		"---\n{{end}}{{ if gt (len .Results) 0 }}* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `atlantis apply`{{end}}" +
+		"    * `{{.ApplyCmd}}`{{end}}" +
 		logTmpl))
 var multiProjectApplyTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
 	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
