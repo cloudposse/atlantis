@@ -36,6 +36,10 @@ type ProjectCommandBuilder interface {
 	// comment doesn't specify one project then there may be multiple commands
 	// to be run.
 	BuildApplyCommands(ctx *CommandContext, commentCommand *CommentCommand) ([]models.ProjectCommandContext, error)
+	// BuildDestroyCommands builds project destroy commands for this comment. If the
+	// comment doesn't specify one project then there may be multiple commands
+	// to be run.
+	BuildDestroyCommands(ctx *CommandContext, commentCommand *CommentCommand) ([]models.ProjectCommandContext, error)
 }
 
 // DefaultProjectCommandBuilder implements ProjectCommandBuilder.
@@ -144,6 +148,7 @@ func (p *DefaultProjectCommandBuilder) buildPlanAllCommands(ctx *CommandContext,
 				Verbose:       verbose,
 				RePlanCmd:     p.CommentBuilder.BuildPlanComment(mp.Path, DefaultWorkspace, "", commentFlags),
 				ApplyCmd:      p.CommentBuilder.BuildApplyComment(mp.Path, DefaultWorkspace, ""),
+				DestroyCmd:    p.CommentBuilder.BuildDestroyComment(mp.Path, DefaultWorkspace, ""),
 			})
 		}
 	} else {
@@ -173,6 +178,7 @@ func (p *DefaultProjectCommandBuilder) buildPlanAllCommands(ctx *CommandContext,
 				Verbose:       verbose,
 				RePlanCmd:     p.CommentBuilder.BuildPlanComment(mp.Dir, mp.Workspace, mp.GetName(), commentFlags),
 				ApplyCmd:      p.CommentBuilder.BuildApplyComment(mp.Dir, mp.Workspace, mp.GetName()),
+				DestroyCmd:    p.CommentBuilder.BuildDestroyComment(mp.Dir, mp.Workspace, mp.GetName()),
 			})
 		}
 	}
@@ -243,7 +249,7 @@ func (p *DefaultProjectCommandBuilder) buildApplyAllCommands(ctx *CommandContext
 	for _, plan := range plans {
 		cmd, err := p.buildProjectCommandCtx(ctx, commentCmd.ProjectName, commentCmd.Flags, plan.RepoDir, plan.RepoRelDir, plan.Workspace)
 		if err != nil {
-			return nil, errors.Wrapf(err, "building command for dir %q", plan.RepoRelDir)
+			return nil, errors.Wrapf(err, "building apply command for dir %q", plan.RepoRelDir)
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -265,6 +271,75 @@ func (p *DefaultProjectCommandBuilder) BuildApplyCommands(ctx *CommandContext, c
 }
 
 func (p *DefaultProjectCommandBuilder) buildProjectApplyCommand(ctx *CommandContext, cmd *CommentCommand) (models.ProjectCommandContext, error) {
+	workspace := DefaultWorkspace
+	if cmd.Workspace != "" {
+		workspace = cmd.Workspace
+	}
+
+	var projCtx models.ProjectCommandContext
+	unlockFn, err := p.WorkingDirLocker.TryLock(ctx.BaseRepo.FullName, ctx.Pull.Num, workspace)
+	if err != nil {
+		return projCtx, err
+	}
+	defer unlockFn()
+
+	repoDir, err := p.WorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, workspace)
+	if err != nil {
+		return projCtx, err
+	}
+
+	repoRelDir := DefaultRepoRelDir
+	if cmd.RepoRelDir != "" {
+		repoRelDir = cmd.RepoRelDir
+	}
+
+	return p.buildProjectCommandCtx(ctx, cmd.ProjectName, cmd.Flags, repoDir, repoRelDir, workspace)
+}
+
+// BuildDestroyCommands builds project destroy commands for this comment. If the
+// comment doesn't specify one project then there may be multiple commands
+// to be run.
+func (p *DefaultProjectCommandBuilder) BuildDestroyCommands(ctx *CommandContext, cmd *CommentCommand) ([]models.ProjectCommandContext, error) {
+	if !cmd.IsForSpecificProject() {
+		return p.buildDestroyAllCommands(ctx, cmd)
+	}
+	pac, err := p.buildProjectDestroyCommand(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return []models.ProjectCommandContext{pac}, nil
+}
+
+func (p *DefaultProjectCommandBuilder) buildDestroyAllCommands(ctx *CommandContext, commentCmd *CommentCommand) ([]models.ProjectCommandContext, error) {
+	// lock all dirs in this pull request
+	unlockFn, err := p.WorkingDirLocker.TryLockPull(ctx.BaseRepo.FullName, ctx.Pull.Num)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockFn()
+
+	pullDir, err := p.WorkingDir.GetPullDir(ctx.BaseRepo, ctx.Pull)
+	if err != nil {
+		return nil, err
+	}
+
+	plans, err := p.PendingPlanFinder.Find(pullDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var cmds []models.ProjectCommandContext
+	for _, plan := range plans {
+		cmd, err := p.buildProjectCommandCtx(ctx, commentCmd.ProjectName, commentCmd.Flags, plan.RepoDir, plan.RepoRelDir, plan.Workspace)
+		if err != nil {
+			return nil, errors.Wrapf(err, "building destroy command for dir %q", plan.RepoRelDir)
+		}
+		cmds = append(cmds, cmd)
+	}
+	return cmds, nil
+}
+
+func (p *DefaultProjectCommandBuilder) buildProjectDestroyCommand(ctx *CommandContext, cmd *CommentCommand) (models.ProjectCommandContext, error) {
 	workspace := DefaultWorkspace
 	if cmd.Workspace != "" {
 		workspace = cmd.Workspace
@@ -316,6 +391,7 @@ func (p *DefaultProjectCommandBuilder) buildProjectCommandCtx(ctx *CommandContex
 		GlobalConfig:  globalCfg,
 		RePlanCmd:     p.CommentBuilder.BuildPlanComment(repoRelDir, workspace, projectName, commentFlags),
 		ApplyCmd:      p.CommentBuilder.BuildApplyComment(repoRelDir, workspace, projectName),
+		DestroyCmd:    p.CommentBuilder.BuildDestroyComment(repoRelDir, workspace, projectName),
 	}, nil
 }
 

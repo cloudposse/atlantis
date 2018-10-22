@@ -58,6 +58,8 @@ type CommentBuilder interface {
 	BuildPlanComment(repoRelDir string, workspace string, project string, commentArgs []string) string
 	// BuildApplyComment builds an apply comment for the specified args.
 	BuildApplyComment(repoRelDir string, workspace string, project string) string
+	// BuildDestroyComment builds a destroy comment for the specified args.
+	BuildDestroyComment(repoRelDir string, workspace string, project string) string
 }
 
 // CommentParser implements CommentParsing
@@ -140,8 +142,8 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 		return CommentParseResult{CommentResponse: e.GetHelpComment()}
 	}
 
-	// Need to have a plan or apply at this point.
-	if !e.stringInSlice(command, []string{PlanCommand.String(), ApplyCommand.String()}) {
+	// Need to have a plan, apply or destroy at this point.
+	if !e.stringInSlice(command, []string{PlanCommand.String(), ApplyCommand.String(), DestroyCommand.String()}) {
 		message := fmt.Sprintf("```\nError: unknown command %q.\nRun '%s --help' for usage.\n```", command, e.GetDidYouMeanWakeWordComment())
 		return CommentParseResult{CommentResponse: message}
 	}
@@ -171,6 +173,14 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 		flagSet.StringVarP(&workspace, workspaceFlagLong, workspaceFlagShort, "", "Apply the plan for this Terraform workspace.")
 		flagSet.StringVarP(&dir, dirFlagLong, dirFlagShort, "", "Apply the plan for this directory, relative to root of repo, ex. 'child/dir'.")
 		flagSet.StringVarP(&project, projectFlagLong, projectFlagShort, "", fmt.Sprintf("Apply the plan for this project. Refers to the name of the project configured in the repos atlantis.yaml file. Cannot be used at same time as workspace or dir flags."))
+		flagSet.BoolVarP(&verbose, verboseFlagLong, verboseFlagShort, false, "Append Atlantis log to comment.")
+	case DestroyCommand.String():
+		name = DestroyCommand
+		flagSet = pflag.NewFlagSet(DestroyCommand.String(), pflag.ContinueOnError)
+		flagSet.SetOutput(ioutil.Discard)
+		flagSet.StringVarP(&workspace, workspaceFlagLong, workspaceFlagShort, "", "Destroy the plan for this Terraform workspace.")
+		flagSet.StringVarP(&dir, dirFlagLong, dirFlagShort, "", "Destroy the plan for this directory, relative to root of repo, ex. 'child/dir'.")
+		flagSet.StringVarP(&project, projectFlagLong, projectFlagShort, "", fmt.Sprintf("Destroy the plan for this project. Refers to the name of the project configured in the repos atlantis.yaml file. Cannot be used at same time as workspace or dir flags."))
 		flagSet.BoolVarP(&verbose, verboseFlagLong, verboseFlagShort, false, "Append Atlantis log to comment.")
 	default:
 		return CommentParseResult{CommentResponse: fmt.Sprintf("Error: unknown command %q – this is a bug", command)}
@@ -255,6 +265,12 @@ func (e *CommentParser) BuildApplyComment(repoRelDir string, workspace string, p
 	return fmt.Sprintf("%s %s%s", e.WakeWord, ApplyCommand.String(), flags)
 }
 
+// BuildDestroyComment builds a destroy comment for the specified args.
+func (e *CommentParser) BuildDestroyComment(repoRelDir string, workspace string, project string) string {
+	flags := e.buildFlags(repoRelDir, workspace, project)
+	return fmt.Sprintf("%s %s%s", e.WakeWord, DestroyCommand.String(), flags)
+}
+
 func (e *CommentParser) buildFlags(repoRelDir string, workspace string, project string) string {
 	switch {
 	// If project is specified we can just use its name.
@@ -327,12 +343,17 @@ Examples:
   # apply the plan for the root directory and staging workspace
   %[1]s apply -d . -w staging
 
+  # destroy the infrastructure for the root directory and staging workspace
+  %[1]s destroy -d . -w staging
+
 Commands:
-  plan   Runs 'terraform plan' for the changes in this pull request.
-         To plan a specific project, use the -d, -w and -p flags.
-  apply  Runs 'terraform apply' on all unapplied plans from this pull request.
-         To only apply a specific plan, use the -d, -w and -p flags.
-  help   View help.
+  plan     Runs 'terraform plan' for the changes in this pull request.
+           To plan a specific project, use the -d, -w and -p flags.
+  apply    Runs 'terraform apply' on all unapplied plans from this pull request.
+           To only apply a specific plan, use the -d, -w and -p flags.
+  destroy  Runs 'terraform destroy' in this pull request.
+           To destroy a specific plan, use the -d, -w and -p flags.
+  help     View help.
 
 Flags:
   -h, --help   help for atlantis

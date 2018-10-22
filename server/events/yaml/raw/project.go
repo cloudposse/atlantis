@@ -12,18 +12,20 @@ import (
 )
 
 const (
-	DefaultWorkspace         = "default"
-	ApprovedApplyRequirement = "approved"
+	DefaultWorkspace           = "default"
+	ApprovedApplyRequirement   = "approved"
+	ApprovedDestroyRequirement = "approved"
 )
 
 type Project struct {
-	Name              *string   `yaml:"name,omitempty"`
-	Dir               *string   `yaml:"dir,omitempty"`
-	Workspace         *string   `yaml:"workspace,omitempty"`
-	Workflow          *string   `yaml:"workflow,omitempty"`
-	TerraformVersion  *string   `yaml:"terraform_version,omitempty"`
-	Autoplan          *Autoplan `yaml:"autoplan,omitempty"`
-	ApplyRequirements []string  `yaml:"apply_requirements,omitempty"`
+	Name                *string   `yaml:"name,omitempty"`
+	Dir                 *string   `yaml:"dir,omitempty"`
+	Workspace           *string   `yaml:"workspace,omitempty"`
+	Workflow            *string   `yaml:"workflow,omitempty"`
+	TerraformVersion    *string   `yaml:"terraform_version,omitempty"`
+	Autoplan            *Autoplan `yaml:"autoplan,omitempty"`
+	ApplyRequirements   []string  `yaml:"apply_requirements,omitempty"`
+	DestroyRequirements []string  `yaml:"destroy_requirements,omitempty"`
 }
 
 func (p Project) Validate() error {
@@ -38,6 +40,15 @@ func (p Project) Validate() error {
 		for _, r := range reqs {
 			if r != ApprovedApplyRequirement {
 				return fmt.Errorf("%q not supported, only %s is supported", r, ApprovedApplyRequirement)
+			}
+		}
+		return nil
+	}
+	validDestroyReq := func(value interface{}) error {
+		reqs := value.([]string)
+		for _, r := range reqs {
+			if r != ApprovedDestroyRequirement {
+				return fmt.Errorf("%q not supported, only %s is supported", r, ApprovedDestroyRequirement)
 			}
 		}
 		return nil
@@ -63,6 +74,7 @@ func (p Project) Validate() error {
 	return validation.ValidateStruct(&p,
 		validation.Field(&p.Dir, validation.Required, validation.By(hasDotDot)),
 		validation.Field(&p.ApplyRequirements, validation.By(validApplyReq)),
+		validation.Field(&p.DestroyRequirements, validation.By(validDestroyReq)),
 		validation.Field(&p.TerraformVersion, validation.By(validTFVersion)),
 		validation.Field(&p.Name, validation.By(validName)),
 	)
@@ -94,6 +106,9 @@ func (p Project) ToValid() valid.Project {
 
 	// There are no default apply requirements.
 	v.ApplyRequirements = p.ApplyRequirements
+
+	// There are no default destroy requirements.
+	v.DestroyRequirements = p.DestroyRequirements
 
 	v.Name = p.Name
 

@@ -19,12 +19,13 @@ import (
 
 // ProjectResult is the result of executing a plan/apply for a specific project.
 type ProjectResult struct {
-	RepoRelDir   string
-	Workspace    string
-	Error        error
-	Failure      string
-	PlanSuccess  *PlanSuccess
-	ApplySuccess string
+	RepoRelDir     string
+	Workspace      string
+	Error          error
+	Failure        string
+	PlanSuccess    *PlanSuccess
+	ApplySuccess   string
+	DestroySuccess string
 }
 
 // Status returns the vcs commit status of this project result.

@@ -297,6 +297,9 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 			ApplyStepRunner: &runtime.ApplyStepRunner{
 				TerraformExecutor: terraformClient,
 			},
+			DestroyStepRunner: &runtime.DestroyStepRunner{
+				TerraformExecutor: terraformClient,
+			},
 			RunStepRunner: &runtime.RunStepRunner{
 				DefaultTFVersion: defaultTfVersion,
 			},

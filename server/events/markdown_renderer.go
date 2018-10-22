@@ -70,6 +70,14 @@ type projectResultTmplData struct {
 	Workspace  string
 	RepoRelDir string
 	Rendered   string
+	// If this is an apply then this will be empty.
+	RePlanCmd string
+	// ApplyCmd is the command that users should run to apply this plan. If
+	// this is an apply then this will be empty.
+	ApplyCmd string
+	// DestroyCmd is the command that users should run to destroy this plan. If
+	// this is an apply then this will be empty.
+	DestroyCmd string
 }
 
 // Render formats the data into a markdown string.
@@ -94,6 +102,9 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 		resultData := projectResultTmplData{
 			Workspace:  result.Workspace,
 			RepoRelDir: result.RepoRelDir,
+			RePlanCmd:  "",
+			ApplyCmd:   "",
+			DestroyCmd: "",
 		}
 		if result.Error != nil {
 			tmpl := unwrappedErrTmpl
@@ -117,6 +128,9 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			})
 		} else if result.PlanSuccess != nil {
 			result.PlanSuccess.TerraformOutput = m.fmtDiff(result.PlanSuccess.TerraformOutput)
+			resultData.RePlanCmd = result.PlanSuccess.RePlanCmd
+			resultData.ApplyCmd = result.PlanSuccess.ApplyCmd
+			resultData.DestroyCmd = result.PlanSuccess.DestroyCmd
 			if m.shouldUseWrappedTmpl(vcsHost, result.PlanSuccess.TerraformOutput) {
 				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, *result.PlanSuccess)
 			} else {
@@ -129,7 +143,12 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			} else {
 				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.ApplySuccess})
 			}
-
+		} else if result.DestroySuccess != "" {
+			if m.shouldUseWrappedTmpl(vcsHost, result.DestroySuccess) {
+				resultData.Rendered = m.renderTemplate(applyWrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
+			} else {
+				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
+			}
 		} else {
 			resultData.Rendered = "Found no template. This is a bug!"
 		}
@@ -193,7 +212,7 @@ var singleProjectPlanSuccessTmpl = template.Must(template.New("").Parse(
 		"\n" +
 		"---\n" +
 		"* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `{{.ApplyCmd}}`" + logTmpl))
+		"    * `{{$result.ApplyCmd}}`" + logTmpl))
 var singleProjectPlanUnsuccessfulTmpl = template.Must(template.New("").Parse(
 	"{{$result := index .Results 0}}Ran {{.Command}} in dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n" +
 		"{{$result.Rendered}}\n" + logTmpl))
@@ -205,8 +224,8 @@ var multiProjectPlanTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap
 		"{{ range $i, $result := .Results }}" +
 		"### {{add $i 1}}. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
 		"{{$result.Rendered}}\n\n" +
-		"---\n{{end}}{{ if gt (len .Results) 0 }}* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `{{.ApplyCmd}}`{{end}}" +
+		"---\n{{end}}{{ if gt (len .Results) 0 }}{{$result := index .Results 0}}*  :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
+		"    * `{{$result.ApplyCmd}}`{{end}}" +
 		logTmpl))
 var multiProjectApplyTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
 	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
@@ -234,7 +253,8 @@ var planSuccessWrappedTmpl = template.Must(template.New("").Parse(
 // to do next.
 var planNextSteps = "* :arrow_forward: To **apply** this plan, comment:\n" +
 	"    * `{{.ApplyCmd}}`\n" +
-	"* :put_litter_in_its_place: To **delete** this plan click [here]({{.LockURL}})\n" +
+	"* :put_litter_in_its_place: To **destroy** this plan, comment:\n" +
+	"    * `{{.DestroyCmd}}`\n" +
 	"* :repeat: To **plan** this project again, comment:\n" +
 	"    * `{{.RePlanCmd}}`"
 var applyUnwrappedSuccessTmpl = template.Must(template.New("").Parse(

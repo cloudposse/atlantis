@@ -301,6 +301,9 @@ type ProjectCommandContext struct {
 	// ApplyCmd is the command that users should run to apply this plan. If
 	// this is an apply then this will be empty.
 	ApplyCmd string
+	// DestroyCmd is the command that users should run to destroy this plan. If
+	// this is an apply then this will be empty.
+	DestroyCmd string
 }
 
 // SplitRepoFullName splits a repo full name up into its owner and repo name
