@@ -373,7 +373,7 @@ func (e *EventsController) handleCommentEvent(w http.ResponseWriter, baseRepo mo
 		return
 	}
 
-	// Check if the user who commented has the permissions to execute the 'plan' or 'apply' commands
+	// Check if the user who commented has the permissions to execute 'plan', 'apply' or destroy commands
 	ok, err := e.checkUserPermissions(baseRepo, user, parseResult.Command)
 	if err != nil {
 		e.Logger.Err("unable to comment on pull request: %s", err)
@@ -448,7 +448,7 @@ func (e *EventsController) commentUserDoesNotHavePermissions(baseRepo models.Rep
 
 // checkUserPermissions checks if the user has permissions to execute the command
 func (e *EventsController) checkUserPermissions(repo models.Repo, user models.User, cmd *events.CommentCommand) (bool, error) {
-	if cmd.Name == events.ApplyCommand || cmd.Name == events.PlanCommand {
+	if cmd.Name == events.ApplyCommand || cmd.Name == events.PlanCommand || cmd.Name == events.DestroyCommand {
 		teams, err := e.VCSClient.GetTeamNamesForUser(repo, user)
 		if err != nil {
 			return false, err

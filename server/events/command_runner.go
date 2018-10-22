@@ -158,6 +158,8 @@ func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHead
 		projectCmds, err = c.ProjectCommandBuilder.BuildPlanCommands(ctx, cmd)
 	case ApplyCommand:
 		projectCmds, err = c.ProjectCommandBuilder.BuildApplyCommands(ctx, cmd)
+	case DestroyCommand:
+		projectCmds, err = c.ProjectCommandBuilder.BuildDestroyCommands(ctx, cmd)
 	default:
 		ctx.Log.Err("failed to determine desired command, neither plan nor apply")
 		return
@@ -183,6 +185,8 @@ func (c *DefaultCommandRunner) runProjectCmds(cmds []models.ProjectCommandContex
 			res = c.ProjectCommandRunner.Plan(pCmd)
 		case ApplyCommand:
 			res = c.ProjectCommandRunner.Apply(pCmd)
+		case DestroyCommand:
+			res = c.ProjectCommandRunner.Destroy(pCmd)
 		}
 		results = append(results, res)
 	}

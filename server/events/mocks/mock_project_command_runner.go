@@ -43,6 +43,18 @@ func (mock *MockProjectCommandRunner) Apply(ctx models.ProjectCommandContext) ev
 	return ret0
 }
 
+func (mock *MockProjectCommandRunner) Destroy(ctx models.ProjectCommandContext) events.ProjectResult {
+	params := []pegomock.Param{ctx}
+	result := pegomock.GetGenericMockFrom(mock).Invoke("Destroy", params, []reflect.Type{reflect.TypeOf((*events.ProjectResult)(nil)).Elem()})
+	var ret0 events.ProjectResult
+	if len(result) != 0 {
+		if result[0] != nil {
+			ret0 = result[0].(events.ProjectResult)
+		}
+	}
+	return ret0
+}
+
 func (mock *MockProjectCommandRunner) VerifyWasCalledOnce() *VerifierProjectCommandRunner {
 	return &VerifierProjectCommandRunner{mock, pegomock.Times(1), nil}
 }

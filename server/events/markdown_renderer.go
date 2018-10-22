@@ -75,6 +75,9 @@ type projectResultTmplData struct {
 	// ApplyCmd is the command that users should run to apply this plan. If
 	// this is an apply then this will be empty.
 	ApplyCmd string
+	// DestroyCmd is the command that users should run to destroy this plan. If
+	// this is an apply then this will be empty.
+	DestroyCmd string
 }
 
 // Render formats the data into a markdown string.
@@ -101,6 +104,7 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			RepoRelDir: result.RepoRelDir,
 			RePlanCmd:  "",
 			ApplyCmd:   "",
+			DestroyCmd: "",
 		}
 		if result.Error != nil {
 			tmpl := unwrappedErrTmpl
@@ -126,6 +130,7 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			result.PlanSuccess.TerraformOutput = m.fmtDiff(result.PlanSuccess.TerraformOutput)
 			resultData.RePlanCmd = result.PlanSuccess.RePlanCmd
 			resultData.ApplyCmd = result.PlanSuccess.ApplyCmd
+			resultData.DestroyCmd = result.PlanSuccess.DestroyCmd
 			if m.shouldUseWrappedTmpl(vcsHost, result.PlanSuccess.TerraformOutput) {
 				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, *result.PlanSuccess)
 			} else {
@@ -138,7 +143,12 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			} else {
 				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.ApplySuccess})
 			}
-
+		} else if result.DestroySuccess != "" {
+			if m.shouldUseWrappedTmpl(vcsHost, result.DestroySuccess) {
+				resultData.Rendered = m.renderTemplate(applyWrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
+			} else {
+				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
+			}
 		} else {
 			resultData.Rendered = "Found no template. This is a bug!"
 		}
@@ -243,7 +253,8 @@ var planSuccessWrappedTmpl = template.Must(template.New("").Parse(
 // to do next.
 var planNextSteps = "* :arrow_forward: To **apply** this plan, comment:\n" +
 	"    * `{{.ApplyCmd}}`\n" +
-	"* :put_litter_in_its_place: To **delete** this plan click [here]({{.LockURL}})\n" +
+	"* :put_litter_in_its_place: To **destroy** this plan, comment:\n" +
+	"    * `{{.DestroyCmd}}`\n" +
 	"* :repeat: To **plan** this project again, comment:\n" +
 	"    * `{{.RePlanCmd}}`"
 var applyUnwrappedSuccessTmpl = template.Must(template.New("").Parse(

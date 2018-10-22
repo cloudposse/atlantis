@@ -67,6 +67,22 @@ func (mock *MockProjectCommandBuilder) BuildApplyCommands(ctx *events.CommandCon
 	return ret0, ret1
 }
 
+func (mock *MockProjectCommandBuilder) BuildDestroyCommands(ctx *events.CommandContext, commentCommand *events.CommentCommand) ([]models.ProjectCommandContext, error) {
+	params := []pegomock.Param{ctx, commentCommand}
+	result := pegomock.GetGenericMockFrom(mock).Invoke("BuildDestroyCommands", params, []reflect.Type{reflect.TypeOf((*[]models.ProjectCommandContext)(nil)).Elem(), reflect.TypeOf((*error)(nil)).Elem()})
+	var ret0 []models.ProjectCommandContext
+	var ret1 error
+	if len(result) != 0 {
+		if result[0] != nil {
+			ret0 = result[0].([]models.ProjectCommandContext)
+		}
+		if result[1] != nil {
+			ret1 = result[1].(error)
+		}
+	}
+	return ret0, ret1
+}
+
 func (mock *MockProjectCommandBuilder) VerifyWasCalledOnce() *VerifierProjectCommandBuilder {
 	return &VerifierProjectCommandBuilder{mock, pegomock.Times(1), nil}
 }

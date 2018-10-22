@@ -31,6 +31,15 @@ func (c Config) GetApplyStage(workflowName string) *Stage {
 	return nil
 }
 
+func (c Config) GetDestroyStage(workflowName string) *Stage {
+	for name, flow := range c.Workflows {
+		if name == workflowName {
+			return flow.Apply
+		}
+	}
+	return nil
+}
+
 func (c Config) FindProjectsByDirWorkspace(dir string, workspace string) []Project {
 	var ps []Project
 	for _, p := range c.Projects {
@@ -51,13 +60,14 @@ func (c Config) FindProjectByName(name string) *Project {
 }
 
 type Project struct {
-	Dir               string
-	Workspace         string
-	Name              *string
-	Workflow          *string
-	TerraformVersion  *version.Version
-	Autoplan          Autoplan
-	ApplyRequirements []string
+	Dir                 string
+	Workspace           string
+	Name                *string
+	Workflow            *string
+	TerraformVersion    *version.Version
+	Autoplan            Autoplan
+	ApplyRequirements   []string
+	DestroyRequirements []string
 }
 
 // GetName returns the name of the project or an empty string if there is no
@@ -85,6 +95,7 @@ type Step struct {
 }
 
 type Workflow struct {
-	Apply *Stage
-	Plan  *Stage
+	Apply   *Stage
+	Plan    *Stage
+	Destroy *Stage
 }
