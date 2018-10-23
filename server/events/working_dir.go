@@ -152,7 +152,6 @@ func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 	// Clone the repo
 	log.Info("cloning repo %q", cloneURL)
 	cmd = exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
-	cmd.Dir = cloneDir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", errors.Wrapf(err, "cloning repo %s: %s", headRepo.SanitizedCloneURL, string(output))
 	}
@@ -165,20 +164,12 @@ func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 		return "", errors.Wrapf(err, "checking out branch %q: %s", p.Branch, string(output))
 	}
 
-	// Init submodules for the branch
+	// Recursively update submodules for the branch
 	// https://blog.github.com/2016-02-01-working-with-submodules
 	// https://git-scm.com/book/en/v2/Git-Tools-Submodules
 	// https://stackoverflow.com/questions/15124430/how-to-checkout-old-git-commit-including-all-submodules-recursively/29156667#29156667
-	log.Info("initializing submodules for branch %q", p.Branch)
-	cmd = exec.Command("git", "submodule", "init") // #nosec
-	cmd.Dir = cloneDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", errors.Wrapf(err, "initializing submodules for branch %q: %s", p.Branch, string(output))
-	}
-
-	// Recursively update submodules for the branch
 	log.Info("updating submodules for branch %q", p.Branch)
-	cmd = exec.Command("git", "submodule", "update", "--recursive") // #nosec
+	cmd = exec.Command("git", "submodule", "update", "--init", "--recursive") // #nosec
 	cmd.Dir = cloneDir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", errors.Wrapf(err, "updating submodules for branch %q: %s", p.Branch, string(output))
