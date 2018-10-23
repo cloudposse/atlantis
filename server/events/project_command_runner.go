@@ -63,7 +63,7 @@ type PlanSuccess struct {
 	RePlanCmd string
 	// ApplyCmd is the command that users should run to apply this plan.
 	ApplyCmd string
-	// ApplyCmd is the command that users should run to apply this plan.
+	// DestroyCmd is the command that users should run to destroy this plan.
 	DestroyCmd string
 }
 
@@ -183,6 +183,7 @@ func (p *DefaultProjectCommandRunner) doPlan(ctx models.ProjectCommandContext) (
 		TerraformOutput: strings.Join(outputs, "\n"),
 		RePlanCmd:       ctx.RePlanCmd,
 		ApplyCmd:        ctx.ApplyCmd,
+		DestroyCmd:      ctx.DestroyCmd,
 	}, "", nil
 }
 
