@@ -111,6 +111,15 @@ func (p *DefaultProjectFinder) DetermineProjectsViaConfig(log *logging.SimpleLog
 					log.Debug("project at dir %q not included because dir does not exist", project.Dir)
 				}
 				break
+			} else {
+				// If no match, check if it's a directory.
+				// If it is, it's a submodule that was modified
+				fileInfo, err := os.Stat(filepath.Join(repoDir, file))
+				if err == nil && fileInfo.IsDir() {
+					log.Debug("file %q is a submodule", file)
+					projects = append(projects, project)
+					break
+				}
 			}
 		}
 	}
