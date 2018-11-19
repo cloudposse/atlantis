@@ -304,6 +304,8 @@ type ProjectCommandContext struct {
 	// DestroyCmd is the command that users should run to destroy this plan. If
 	// this is an apply then this will be empty.
 	DestroyCmd string
+	// CustomStageCmds is the list of commands associated to custom stages.
+	CustomStageCmds []string
 }
 
 // SplitRepoFullName splits a repo full name up into its owner and repo name

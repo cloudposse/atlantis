@@ -60,6 +60,8 @@ type CommentBuilder interface {
 	BuildApplyComment(repoRelDir string, workspace string, project string) string
 	// BuildDestroyComment builds a destroy comment for the specified args.
 	BuildDestroyComment(repoRelDir string, workspace string, project string) string
+	// BuildCustomStageComments builds a custom stage comment for the specified args.
+	BuildCustomStageComments(repoRelDir string, workspace string, project string) []string
 }
 
 // CommentParser implements CommentParsing
@@ -288,6 +290,15 @@ func (e *CommentParser) BuildApplyComment(repoRelDir string, workspace string, p
 func (e *CommentParser) BuildDestroyComment(repoRelDir string, workspace string, project string) string {
 	flags := e.buildFlags(repoRelDir, workspace, project)
 	return fmt.Sprintf("%s %s%s", e.WakeWord, DestroyCommand.String(), flags)
+}
+
+func (e *CommentParser) BuildCustomStageComments(repoRelDir string, workspace string, project string) []string {
+	flags := e.buildFlags(repoRelDir, workspace, project)
+	comments := []string{}
+	for _, stage := range e.CustomStageNames {
+		comments = append(comments, fmt.Sprintf("%s %s%s", e.WakeWord, stage, flags))
+	}
+	return comments
 }
 
 func (e *CommentParser) buildFlags(repoRelDir string, workspace string, project string) string {
