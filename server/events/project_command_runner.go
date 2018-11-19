@@ -78,6 +78,8 @@ type ProjectCommandRunner interface {
 	Apply(ctx models.ProjectCommandContext) ProjectResult
 	// Destroy runs terraform destroy for the project described by ctx.
 	Destroy(ctx models.ProjectCommandContext) ProjectResult
+	// RunCustomStage runs arbitrary shell commands for the project described by ctx.
+	RunCustomStage(ctx models.ProjectCommandContext, stageName string) ProjectResult
 }
 
 // DefaultProjectCommandRunner implements ProjectCommandRunner.
@@ -123,6 +125,18 @@ func (p *DefaultProjectCommandRunner) Apply(ctx models.ProjectCommandContext) Pr
 // Destroy runs terraform destroy for the project described by ctx.
 func (p *DefaultProjectCommandRunner) Destroy(ctx models.ProjectCommandContext) ProjectResult {
 	destroyOut, failure, err := p.doDestroy(ctx)
+	return ProjectResult{
+		Failure:        failure,
+		Error:          err,
+		DestroySuccess: destroyOut,
+		RepoRelDir:     ctx.RepoRelDir,
+		Workspace:      ctx.Workspace,
+	}
+}
+
+// RunCustomCommands runs arbitrary shell commands for the project described by ctx.
+func (p *DefaultProjectCommandRunner) RunCustomStage(ctx models.ProjectCommandContext, stageName string) ProjectResult {
+	destroyOut, failure, err := p.runCustomStage(ctx, stageName)
 	return ProjectResult{
 		Failure:        failure,
 		Error:          err,
@@ -321,6 +335,48 @@ func (p *DefaultProjectCommandRunner) doDestroy(ctx models.ProjectCommandContext
 			stage = *configuredStage
 		}
 	}
+	outputs, err := p.runSteps(stage.Steps, ctx, absPath)
+	p.Webhooks.Send(ctx.Log, webhooks.ApplyResult{ // nolint: errcheck
+		Workspace: ctx.Workspace,
+		User:      ctx.User,
+		Repo:      ctx.BaseRepo,
+		Pull:      ctx.Pull,
+		Success:   err == nil,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("%s\n%s", err, strings.Join(outputs, "\n"))
+	}
+	return strings.Join(outputs, "\n"), "", nil
+}
+
+func (p *DefaultProjectCommandRunner) runCustomStage(ctx models.ProjectCommandContext, stageName string) (destroyOut string, failure string, err error) {
+	repoDir, err := p.WorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", "", errors.New("project has not been cloned – did you run plan?")
+		}
+		return "", "", err
+	}
+	absPath := filepath.Join(repoDir, ctx.RepoRelDir)
+
+	// Acquire internal lock for the directory we're going to operate in.
+	unlockFn, err := p.WorkingDirLocker.TryLock(ctx.BaseRepo.FullName, ctx.Pull.Num, ctx.Workspace)
+	if err != nil {
+		return "", "", err
+	}
+	defer unlockFn()
+
+	// Use default stage unless another workflow is defined in config
+	stage := p.defaultDestroyStage()
+	if ctx.ProjectConfig != nil && ctx.ProjectConfig.Workflow != nil {
+		configuredStage := ctx.GlobalConfig.GetCustomStage(*ctx.ProjectConfig.Workflow, stageName)
+		if configuredStage != nil {
+			stage = *configuredStage
+		}
+	} else {
+		return "", "", fmt.Errorf("no stage found for workflow \"%s\"", ctx.ProjectConfig.Workflow)
+	}
+
 	outputs, err := p.runSteps(stage.Steps, ctx, absPath)
 	p.Webhooks.Send(ctx.Log, webhooks.ApplyResult{ // nolint: errcheck
 		Workspace: ctx.Workspace,

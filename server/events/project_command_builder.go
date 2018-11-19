@@ -40,6 +40,11 @@ type ProjectCommandBuilder interface {
 	// comment doesn't specify one project then there may be multiple commands
 	// to be run.
 	BuildDestroyCommands(ctx *CommandContext, commentCommand *CommentCommand) ([]models.ProjectCommandContext, error)
+
+	// BuildCustomCommands builds project custom commands for this comment. If the
+	// comment doesn't specify one project then there may be multiple commands
+	// to be run.
+	BuildCustomCommands(ctx *CommandContext, commentCommand *CommentCommand) ([]models.ProjectCommandContext, error)
 }
 
 // DefaultProjectCommandBuilder implements ProjectCommandBuilder.
@@ -149,6 +154,7 @@ func (p *DefaultProjectCommandBuilder) buildPlanAllCommands(ctx *CommandContext,
 				RePlanCmd:     p.CommentBuilder.BuildPlanComment(mp.Path, DefaultWorkspace, "", commentFlags),
 				ApplyCmd:      p.CommentBuilder.BuildApplyComment(mp.Path, DefaultWorkspace, ""),
 				DestroyCmd:    p.CommentBuilder.BuildDestroyComment(mp.Path, DefaultWorkspace, ""),
+				CustomCmd:     p.CommentBuilder.BuildCustomComment(mp.Path, DefaultWorkspace, ""),
 			})
 		}
 	} else {
@@ -179,6 +185,7 @@ func (p *DefaultProjectCommandBuilder) buildPlanAllCommands(ctx *CommandContext,
 				RePlanCmd:     p.CommentBuilder.BuildPlanComment(mp.Dir, mp.Workspace, mp.GetName(), commentFlags),
 				ApplyCmd:      p.CommentBuilder.BuildApplyComment(mp.Dir, mp.Workspace, mp.GetName()),
 				DestroyCmd:    p.CommentBuilder.BuildDestroyComment(mp.Dir, mp.Workspace, mp.GetName()),
+				DestroyCmd:    p.CommentBuilder.BuildCustomComment(mp.Dir, mp.Workspace, mp.GetName()),
 			})
 		}
 	}

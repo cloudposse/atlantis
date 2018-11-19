@@ -69,6 +69,8 @@ type CommentParser struct {
 	GitlabUser  string
 	GitlabToken string
 	WakeWord    string
+
+	CustomStageNames []string
 }
 
 // CommentParseResult describes the result of parsing a comment as a command.
@@ -183,7 +185,24 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 		flagSet.StringVarP(&project, projectFlagLong, projectFlagShort, "", fmt.Sprintf("Destroy the plan for this project. Refers to the name of the project configured in the repos atlantis.yaml file. Cannot be used at same time as workspace or dir flags."))
 		flagSet.BoolVarP(&verbose, verboseFlagLong, verboseFlagShort, false, "Append Atlantis log to comment.")
 	default:
-		return CommentParseResult{CommentResponse: fmt.Sprintf("Error: unknown command %q – this is a bug", command)}
+		if e.CustomStageNames != nil {
+			ok := false
+			for _, stage := range e.CustomStageNames {
+				if stage == command {
+					ok = true
+				}
+			}
+			if !ok {
+				return CommentParseResult{CommentResponse: fmt.Sprintf("Error: unknown command %q – this is a bug", command)}
+			}
+		}
+		name = CommandName{command}
+		flagSet = pflag.NewFlagSet(DestroyCommand.String(), pflag.ContinueOnError)
+		flagSet.SetOutput(ioutil.Discard)
+		flagSet.StringVarP(&workspace, workspaceFlagLong, workspaceFlagShort, "", fmt.Sprintf("Run `%s` for this workspace.", command))
+		flagSet.StringVarP(&dir, dirFlagLong, dirFlagShort, "", fmt.Sprintf("Run `%s` for this directory, relative to root of repo, ex. 'child/dir'.", command))
+		flagSet.StringVarP(&project, projectFlagLong, projectFlagShort, "", fmt.Sprintf("Run `%s` for this project. Refers to the name of the project configured in the repos atlantis.yaml file. Cannot be used at same time as workspace or dir flags.", command))
+		flagSet.BoolVarP(&verbose, verboseFlagLong, verboseFlagShort, false, "Append Atlantis log to comment.")
 	}
 
 	// Now parse the flags.

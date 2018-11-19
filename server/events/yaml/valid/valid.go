@@ -40,6 +40,15 @@ func (c Config) GetDestroyStage(workflowName string) *Stage {
 	return nil
 }
 
+func (c Config) GetCustomStage(workflowName string, stageName string) *Stage {
+	for name, flow := range c.Workflows {
+		if name == workflowName {
+			return flow.CustomStages[stageName]
+		}
+	}
+	return nil
+}
+
 func (c Config) FindProjectsByDirWorkspace(dir string, workspace string) []Project {
 	var ps []Project
 	for _, p := range c.Projects {
@@ -98,4 +107,6 @@ type Workflow struct {
 	Apply   *Stage
 	Plan    *Stage
 	Destroy *Stage
+
+	CustomStages map[string]*Stage
 }

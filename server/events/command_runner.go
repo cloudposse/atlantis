@@ -161,7 +161,10 @@ func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHead
 	case DestroyCommand:
 		projectCmds, err = c.ProjectCommandBuilder.BuildDestroyCommands(ctx, cmd)
 	default:
-		ctx.Log.Err("failed to determine desired command, neither plan nor apply")
+		projectCmds, err = c.ProjectCommandBuilder.BuildCustomCommands(ctx, cmd)
+		if err != nil {
+			ctx.Log.Err("failed to determine desired command, neither plan, nor apply, nor destroy: %v", err)
+		}
 		return
 	}
 	if err != nil {
@@ -176,9 +179,9 @@ func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHead
 			ProjectResults: results})
 }
 
-func (c *DefaultCommandRunner) runProjectCmds(cmds []models.ProjectCommandContext, cmdName CommandName) []ProjectResult {
+func (c *DefaultCommandRunner) runProjectCmds(projectCmds []models.ProjectCommandContext, cmdName CommandName) []ProjectResult {
 	var results []ProjectResult
-	for _, pCmd := range cmds {
+	for _, pCmd := range projectCmds {
 		var res ProjectResult
 		switch cmdName {
 		case PlanCommand:
@@ -187,6 +190,8 @@ func (c *DefaultCommandRunner) runProjectCmds(cmds []models.ProjectCommandContex
 			res = c.ProjectCommandRunner.Apply(pCmd)
 		case DestroyCommand:
 			res = c.ProjectCommandRunner.Destroy(pCmd)
+		default:
+			res = c.ProjectCommandRunner.RunCustomStage(pCmd, cmdName.stage)
 		}
 		results = append(results, res)
 	}

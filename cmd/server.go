@@ -403,6 +403,9 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	if c.WakeWord == "" {
 		c.WakeWord = DefaultWakeWord
 	}
+	if c.CustomStageNames == nil || len(c.CustomStageNames) == 0 {
+		c.CustomStageNames = []string{}
+	}
 }
 
 func (s *ServerCmd) validate(userConfig server.UserConfig) error {

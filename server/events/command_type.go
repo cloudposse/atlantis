@@ -14,27 +14,22 @@
 package events
 
 // CommandName is which command to run.
-type CommandName int
+type CommandName struct {
+	// stage is the name of Stage tied to this Command
+	stage string
+}
 
-const (
+var (
 	// ApplyCommand is a command to run terraform apply.
-	ApplyCommand CommandName = iota
+	ApplyCommand = CommandName{"apply"}
 	// PlanCommand is a command to run terraform plan.
-	PlanCommand
+	PlanCommand = CommandName{"plan"}
 	// DestroyCommand is a command to run terraform destroy.
-	DestroyCommand
+	DestroyCommand = CommandName{"destroy"}
 	// Adding more? Don't forget to update String() below
 )
 
 // String returns the string representation of c.
 func (c CommandName) String() string {
-	switch c {
-	case ApplyCommand:
-		return "apply"
-	case PlanCommand:
-		return "plan"
-	case DestroyCommand:
-		return "destroy"
-	}
-	return ""
+	return c.stage
 }

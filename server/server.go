@@ -104,12 +104,13 @@ type UserConfig struct {
 	RepoWhitelist          string `mapstructure:"repo-whitelist"`
 	// RequireApproval is whether to require pull request approval before
 	// allowing terraform apply's to be run.
-	RequireApproval bool            `mapstructure:"require-approval"`
-	SlackToken      string          `mapstructure:"slack-token"`
-	SSLCertFile     string          `mapstructure:"ssl-cert-file"`
-	SSLKeyFile      string          `mapstructure:"ssl-key-file"`
-	WakeWord        string          `mapstructure:"wake-word"`
-	Webhooks        []WebhookConfig `mapstructure:"webhooks"`
+	RequireApproval  bool            `mapstructure:"require-approval"`
+	SlackToken       string          `mapstructure:"slack-token"`
+	SSLCertFile      string          `mapstructure:"ssl-cert-file"`
+	SSLKeyFile       string          `mapstructure:"ssl-key-file"`
+	WakeWord         string          `mapstructure:"wake-word"`
+	CustomStageNames []string        `mapstructure:"custom-stages"`
+	Webhooks         []WebhookConfig `mapstructure:"webhooks"`
 }
 
 // Config holds config for server that isn't passed in by the user.
@@ -254,11 +255,12 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		BitbucketServerURL: userConfig.BitbucketBaseURL,
 	}
 	commentParser := &events.CommentParser{
-		GithubUser:  userConfig.GithubUser,
-		GithubToken: userConfig.GithubToken,
-		GitlabUser:  userConfig.GitlabUser,
-		GitlabToken: userConfig.GitlabToken,
-		WakeWord:    userConfig.WakeWord,
+		GithubUser:       userConfig.GithubUser,
+		GithubToken:      userConfig.GithubToken,
+		GitlabUser:       userConfig.GitlabUser,
+		GitlabToken:      userConfig.GitlabToken,
+		WakeWord:         userConfig.WakeWord,
+		CustomStageNames: userConfig.CustomStageNames,
 	}
 	defaultTfVersion := terraformClient.Version()
 	commandRunner := &events.DefaultCommandRunner{
