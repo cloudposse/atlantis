@@ -147,7 +147,9 @@ func (e *CommentParser) Parse(comment string, vcsHost models.VCSHostType) Commen
 	}
 
 	// Need to have a plan, apply or destroy at this point.
-	if !e.stringInSlice(command, []string{PlanCommand.String(), ApplyCommand.String(), DestroyCommand.String()}) {
+	knownCmds := []string{PlanCommand.String(), ApplyCommand.String(), DestroyCommand.String()}
+	knownCmds = append(knownCmds, e.CustomStageNames...)
+	if !e.stringInSlice(command, knownCmds) {
 		message := fmt.Sprintf("```\nError: unknown command %q.\nRun '%s --help' for usage.\n```", command, e.GetDidYouMeanWakeWordComment())
 		return CommentParseResult{CommentResponse: message}
 	}
