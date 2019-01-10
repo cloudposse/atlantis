@@ -57,6 +57,7 @@ const (
 	RepoConfigFlag             = "repo-config"
 	RepoWhitelistFlag          = "repo-whitelist"
 	RequireApprovalFlag        = "require-approval"
+	RequireMergeableFlag       = "require-mergeable"
 	SSLCertFileFlag            = "ssl-cert-file"
 	SSLKeyFileFlag             = "ssl-key-file"
 	WakeWordFlag               = "wake-word"
@@ -212,6 +213,11 @@ var boolFlags = []boolFlag{
 	{
 		name:         RequireApprovalFlag,
 		description:  "Require pull requests to be \"Approved\" before allowing the apply command to be run.",
+		defaultValue: false,
+	},
+	{
+		name:         RequireMergeableFlag,
+		description:  "Require pull requests to be mergeable before allowing the apply command to be run.",
 		defaultValue: false,
 	},
 }
