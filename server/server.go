@@ -104,12 +104,15 @@ type UserConfig struct {
 	RepoWhitelist          string `mapstructure:"repo-whitelist"`
 	// RequireApproval is whether to require pull request approval before
 	// allowing terraform apply's to be run.
-	RequireApproval bool            `mapstructure:"require-approval"`
-	SlackToken      string          `mapstructure:"slack-token"`
-	SSLCertFile     string          `mapstructure:"ssl-cert-file"`
-	SSLKeyFile      string          `mapstructure:"ssl-key-file"`
-	WakeWord        string          `mapstructure:"wake-word"`
-	Webhooks        []WebhookConfig `mapstructure:"webhooks"`
+	RequireApproval bool `mapstructure:"require-approval"`
+	// RequireMergeable is whether to require pull requests to be mergeable before
+	// allowing terraform apply's to run.
+	RequireMergeable bool            `mapstructure:"require-mergeable"`
+	SlackToken       string          `mapstructure:"slack-token"`
+	SSLCertFile      string          `mapstructure:"ssl-cert-file"`
+	SSLKeyFile       string          `mapstructure:"ssl-key-file"`
+	WakeWord         string          `mapstructure:"wake-word"`
+	Webhooks         []WebhookConfig `mapstructure:"webhooks"`
 }
 
 // Config holds config for server that isn't passed in by the user.
@@ -303,11 +306,12 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 			RunStepRunner: &runtime.RunStepRunner{
 				DefaultTFVersion: defaultTfVersion,
 			},
-			PullApprovedChecker:     vcsClient,
-			WorkingDir:              workingDir,
-			Webhooks:                webhooksManager,
-			WorkingDirLocker:        workingDirLocker,
-			RequireApprovalOverride: userConfig.RequireApproval,
+			PullApprovedChecker:      vcsClient,
+			WorkingDir:               workingDir,
+			Webhooks:                 webhooksManager,
+			WorkingDirLocker:         workingDirLocker,
+			RequireApprovalOverride:  userConfig.RequireApproval,
+			RequireMergeableOverride: userConfig.RequireMergeable,
 		},
 	}
 	repoWhitelist, err := events.NewRepoWhitelistChecker(userConfig.RepoWhitelist)
