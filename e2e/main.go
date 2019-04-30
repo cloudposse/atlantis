@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/github"
-	"github.com/hashicorp/go-multierror"
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 var defaultAtlantisURL = "http://localhost:4141"
@@ -115,10 +115,9 @@ func main() {
 
 }
 
-func createAtlantisWebhook(g *GithubClient, ownerName string, repoName string, hookURL string) (int, error) {
+func createAtlantisWebhook(g *GithubClient, ownerName string, repoName string, hookURL string) (int64, error) {
 	// create atlantis hook
 	atlantisHook := &github.Hook{
-		Name:   github.String("web"),
 		Events: []string{"issue_comment", "pull_request", "push"},
 		Config: map[string]interface{}{
 			"url":          hookURL,
@@ -137,8 +136,7 @@ func createAtlantisWebhook(g *GithubClient, ownerName string, repoName string, h
 	return hook.GetID(), nil
 }
 
-// nolint: unparam
-func deleteAtlantisHook(g *GithubClient, ownerName string, repoName string, hookID int) error {
+func deleteAtlantisHook(g *GithubClient, ownerName string, repoName string, hookID int64) error {
 	_, err := g.client.Repositories.DeleteHook(g.ctx, ownerName, repoName, hookID)
 	if err != nil {
 		return err

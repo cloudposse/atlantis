@@ -18,17 +18,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var commentParser = events.CommentParser{
-	GithubUser:  "github-user",
-	GithubToken: "github-token",
-	GitlabUser:  "gitlab-user",
-	GitlabToken: "gitlab-token",
-	WakeWord:    "atlantis",
+	GithubUser: "github-user",
+	GitlabUser: "gitlab-user",
 }
 
 func TestParse_Ignored(t *testing.T) {
@@ -38,6 +35,7 @@ func TestParse_Ignored(t *testing.T) {
 		"abc",
 		"atlantis plan\nbut with newlines",
 		"terraform plan\nbut with newlines",
+		"This shouldn't error, but it does.",
 	}
 	for _, c := range ignoreComments {
 		r := commentParser.Parse(c, models.Github)
@@ -58,59 +56,59 @@ func TestParse_HelpResponse(t *testing.T) {
 	}
 	for _, c := range helpComments {
 		r := commentParser.Parse(c, models.Github)
-		Equals(t, commentParser.GetHelpComment(), r.CommentResponse)
+		Equals(t, events.HelpComment, r.CommentResponse)
 	}
 }
 
 func TestParse_UnusedArguments(t *testing.T) {
 	t.Log("if there are unused flags we return an error")
 	cases := []struct {
-		Command events.CommandName
+		Command models.CommandName
 		Args    string
 		Unused  string
 	}{
 		{
-			events.PlanCommand,
+			models.PlanCommand,
 			"-d . arg",
 			"arg",
 		},
 		{
-			events.PlanCommand,
+			models.PlanCommand,
 			"arg -d .",
 			"arg",
 		},
 		{
-			events.PlanCommand,
+			models.PlanCommand,
 			"arg",
 			"arg",
 		},
 		{
-			events.PlanCommand,
+			models.PlanCommand,
 			"arg arg2",
 			"arg arg2",
 		},
 		{
-			events.PlanCommand,
+			models.PlanCommand,
 			"-d . arg -w kjj arg2",
 			"arg arg2",
 		},
 		{
-			events.ApplyCommand,
+			models.ApplyCommand,
 			"-d . arg",
 			"arg",
 		},
 		{
-			events.ApplyCommand,
+			models.ApplyCommand,
 			"arg arg2",
 			"arg arg2",
 		},
 		{
-			events.ApplyCommand,
+			models.ApplyCommand,
 			"arg arg2 -- useful",
 			"arg arg2",
 		},
 		{
-			events.ApplyCommand,
+			models.ApplyCommand,
 			"arg arg2 --",
 			"arg arg2",
 		},
@@ -120,7 +118,7 @@ func TestParse_UnusedArguments(t *testing.T) {
 		t.Run(comment, func(t *testing.T) {
 			r := commentParser.Parse(comment, models.Github)
 			usage := PlanUsage
-			if c.Command == events.ApplyCommand {
+			if c.Command == models.ApplyCommand {
 				usage = ApplyUsage
 			}
 			Equals(t, fmt.Sprintf("```\nError: unknown argument(s) – %s.\n%s```", c.Unused, usage), r.CommentResponse)
@@ -142,8 +140,8 @@ func TestParse_DidYouMeanAtlantis(t *testing.T) {
 	}
 	for _, c := range comments {
 		r := commentParser.Parse(c, models.Github)
-		Assert(t, r.CommentResponse == commentParser.GetDidYouMeanWakeWordComment(),
-			"For comment %q expected CommentResponse==%q but got %q", c, commentParser.GetDidYouMeanWakeWordComment(), r.CommentResponse)
+		Assert(t, r.CommentResponse == events.DidYouMeanAtlantisComment,
+			"For comment %q expected CommentResponse==%q but got %q", c, events.DidYouMeanAtlantisComment, r.CommentResponse)
 	}
 }
 
@@ -252,7 +250,7 @@ func TestParse_Multiline(t *testing.T) {
 			Equals(t, &events.CommentCommand{
 				RepoRelDir:  "",
 				Flags:       nil,
-				Name:        events.PlanCommand,
+				Name:        models.PlanCommand,
 				Verbose:     false,
 				Workspace:   "",
 				ProjectName: "",
@@ -446,7 +444,7 @@ func TestParse_Parsing(t *testing.T) {
 			"",
 			"",
 			false,
-			`"\";echo" "\"hi"`,
+			`";echo hi"`,
 			"",
 		},
 		{
@@ -515,6 +513,14 @@ func TestParse_Parsing(t *testing.T) {
 			"",
 			"",
 		},
+		{
+			"-d \"dir with space\"",
+			"",
+			"dir with space",
+			false,
+			"",
+			"",
+		},
 	}
 	for _, test := range cases {
 		for _, cmdName := range []string{"plan", "apply"} {
@@ -528,10 +534,10 @@ func TestParse_Parsing(t *testing.T) {
 				actExtraArgs := strings.Join(r.Command.Flags, " ")
 				Assert(t, test.expExtraArgs == actExtraArgs, "exp extra args to equal %v but got %v for comment %q", test.expExtraArgs, actExtraArgs, comment)
 				if cmdName == "plan" {
-					Assert(t, r.Command.Name == events.PlanCommand, "did not parse comment %q as plan command", comment)
+					Assert(t, r.Command.Name == models.PlanCommand, "did not parse comment %q as plan command", comment)
 				}
 				if cmdName == "apply" {
-					Assert(t, r.Command.Name == events.ApplyCommand, "did not parse comment %q as apply command", comment)
+					Assert(t, r.Command.Name == models.ApplyCommand, "did not parse comment %q as apply command", comment)
 				}
 			})
 		}
@@ -611,16 +617,23 @@ func TestBuildPlanApplyComment(t *testing.T) {
 			expPlanFlags:  "-d dir -w workspace -- arg1 arg2 arg3",
 			expApplyFlags: "-d dir -w workspace",
 		},
+		{
+			repoRelDir:    "dir with spaces",
+			workspace:     "default",
+			project:       "",
+			expPlanFlags:  "-d \"dir with spaces\"",
+			expApplyFlags: "-d \"dir with spaces\"",
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.expPlanFlags, func(t *testing.T) {
-			for _, cmd := range []events.CommandName{events.PlanCommand, events.ApplyCommand} {
+			for _, cmd := range []models.CommandName{models.PlanCommand, models.ApplyCommand} {
 				switch cmd {
-				case events.PlanCommand:
+				case models.PlanCommand:
 					actComment := commentParser.BuildPlanComment(c.repoRelDir, c.workspace, c.project, c.commentArgs)
 					Equals(t, fmt.Sprintf("atlantis plan %s", c.expPlanFlags), actComment)
-				case events.ApplyCommand:
+				case models.ApplyCommand:
 					actComment := commentParser.BuildApplyComment(c.repoRelDir, c.workspace, c.project)
 					Equals(t, fmt.Sprintf("atlantis apply %s", c.expApplyFlags), actComment)
 				}
@@ -629,12 +642,48 @@ func TestBuildPlanApplyComment(t *testing.T) {
 	}
 }
 
+func TestParse_VCSUsername(t *testing.T) {
+	cp := events.CommentParser{
+		GithubUser:    "gh",
+		GitlabUser:    "gl",
+		BitbucketUser: "bb",
+	}
+	cases := []struct {
+		vcs  models.VCSHostType
+		user string
+	}{
+		{
+			vcs:  models.Github,
+			user: "gh",
+		},
+		{
+			vcs:  models.Gitlab,
+			user: "gl",
+		},
+		{
+			vcs:  models.BitbucketServer,
+			user: "bb",
+		},
+		{
+			vcs:  models.BitbucketCloud,
+			user: "bb",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.vcs.String(), func(t *testing.T) {
+			r := cp.Parse(fmt.Sprintf("@%s %s", c.user, "help"), c.vcs)
+			Equals(t, events.HelpComment, r.CommentResponse)
+		})
+	}
+}
+
 var PlanUsage = `Usage of plan:
   -d, --dir string         Which directory to run plan in relative to root of repo,
                            ex. 'child/dir'.
   -p, --project string     Which project to run plan for. Refers to the name of the
-                           project configured in the repo's atlantis.yaml file.
-                           Cannot be used at same time as workspace or dir flags.
+                           project configured in atlantis.yaml. Cannot be used at
+                           same time as workspace or dir flags.
       --verbose            Append Atlantis log to comment.
   -w, --workspace string   Switch to this Terraform workspace before planning.
 `
@@ -643,8 +692,8 @@ var ApplyUsage = `Usage of apply:
   -d, --dir string         Apply the plan for this directory, relative to root of
                            repo, ex. 'child/dir'.
   -p, --project string     Apply the plan for this project. Refers to the name of
-                           the project configured in the repo's atlantis.yaml file.
-                           Cannot be used at same time as workspace or dir flags.
+                           the project configured in atlantis.yaml. Cannot be used
+                           at same time as workspace or dir flags.
       --verbose            Append Atlantis log to comment.
   -w, --workspace string   Apply the plan for this Terraform workspace.
 `

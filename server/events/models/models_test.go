@@ -14,11 +14,12 @@
 package models_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestNewRepo_EmptyRepoFullName(t *testing.T) {
@@ -254,4 +255,122 @@ func TestSplitRepoFullName(t *testing.T) {
 			Equals(t, c.expRepo, repo)
 		})
 	}
+}
+
+func TestProjectResult_IsSuccessful(t *testing.T) {
+	cases := map[string]struct {
+		pr  models.ProjectResult
+		exp bool
+	}{
+		"plan success": {
+			models.ProjectResult{
+				PlanSuccess: &models.PlanSuccess{},
+			},
+			true,
+		},
+		"apply success": {
+			models.ProjectResult{
+				ApplySuccess: "success",
+			},
+			true,
+		},
+		"failure": {
+			models.ProjectResult{
+				Failure: "failure",
+			},
+			false,
+		},
+		"error": {
+			models.ProjectResult{
+				Error: errors.New("error"),
+			},
+			false,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			Equals(t, c.exp, c.pr.IsSuccessful())
+		})
+	}
+}
+
+func TestProjectResult_PlanStatus(t *testing.T) {
+	cases := []struct {
+		p         models.ProjectResult
+		expStatus models.ProjectPlanStatus
+	}{
+		{
+			p: models.ProjectResult{
+				Command: models.PlanCommand,
+				Error:   errors.New("err"),
+			},
+			expStatus: models.ErroredPlanStatus,
+		},
+		{
+			p: models.ProjectResult{
+				Command: models.PlanCommand,
+				Failure: "failure",
+			},
+			expStatus: models.ErroredPlanStatus,
+		},
+		{
+			p: models.ProjectResult{
+				Command:     models.PlanCommand,
+				PlanSuccess: &models.PlanSuccess{},
+			},
+			expStatus: models.PlannedPlanStatus,
+		},
+		{
+			p: models.ProjectResult{
+				Command: models.ApplyCommand,
+				Error:   errors.New("err"),
+			},
+			expStatus: models.ErroredApplyStatus,
+		},
+		{
+			p: models.ProjectResult{
+				Command: models.ApplyCommand,
+				Failure: "failure",
+			},
+			expStatus: models.ErroredApplyStatus,
+		},
+		{
+			p: models.ProjectResult{
+				Command:      models.ApplyCommand,
+				ApplySuccess: "success",
+			},
+			expStatus: models.AppliedPlanStatus,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.expStatus.String(), func(t *testing.T) {
+			Equals(t, c.expStatus, c.p.PlanStatus())
+		})
+	}
+}
+
+func TestPullStatus_StatusCount(t *testing.T) {
+	ps := models.PullStatus{
+		Projects: []models.ProjectStatus{
+			{
+				Status: models.PlannedPlanStatus,
+			},
+			{
+				Status: models.PlannedPlanStatus,
+			},
+			{
+				Status: models.AppliedPlanStatus,
+			},
+			{
+				Status: models.ErroredApplyStatus,
+			},
+		},
+	}
+
+	Equals(t, 2, ps.StatusCount(models.PlannedPlanStatus))
+	Equals(t, 1, ps.StatusCount(models.AppliedPlanStatus))
+	Equals(t, 1, ps.StatusCount(models.ErroredApplyStatus))
+	Equals(t, 0, ps.StatusCount(models.ErroredPlanStatus))
 }

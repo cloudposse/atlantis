@@ -21,13 +21,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/server/events/vcs/fixtures"
-	. "github.com/cloudposse/atlantis/testing"
 	"github.com/google/go-github/github"
-	"github.com/lkysow/go-gitlab"
+	gitlab "github.com/lkysow/go-gitlab"
 	"github.com/mohae/deepcopy"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/server/events/vcs/fixtures"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var parser = events.EventParser{
@@ -146,7 +146,8 @@ func TestParseGithubPullEvent(t *testing.T) {
 	Equals(t, models.PullRequest{
 		URL:        Pull.GetHTMLURL(),
 		Author:     Pull.User.GetLogin(),
-		Branch:     Pull.Head.GetRef(),
+		HeadBranch: Pull.Head.GetRef(),
+		BaseBranch: Pull.Base.GetRef(),
 		HeadCommit: Pull.Head.GetSHA(),
 		Num:        Pull.GetNumber(),
 		State:      models.OpenPullState,
@@ -231,6 +232,11 @@ func TestParseGithubPull(t *testing.T) {
 	ErrEquals(t, "head.ref is null", err)
 
 	testPull = deepcopy.Copy(Pull).(github.PullRequest)
+	testPull.Base.Ref = nil
+	_, _, _, err = parser.ParseGithubPull(&testPull)
+	ErrEquals(t, "base.ref is null", err)
+
+	testPull = deepcopy.Copy(Pull).(github.PullRequest)
 	testPull.User.Login = nil
 	_, _, _, err = parser.ParseGithubPull(&testPull)
 	ErrEquals(t, "user.login is null", err)
@@ -256,7 +262,8 @@ func TestParseGithubPull(t *testing.T) {
 	Equals(t, models.PullRequest{
 		URL:        Pull.GetHTMLURL(),
 		Author:     Pull.User.GetLogin(),
-		Branch:     Pull.Head.GetRef(),
+		HeadBranch: Pull.Head.GetRef(),
+		BaseBranch: Pull.Base.GetRef(),
 		HeadCommit: Pull.Head.GetSHA(),
 		Num:        Pull.GetNumber(),
 		State:      models.OpenPullState,
@@ -278,23 +285,24 @@ func TestParseGitlabMergeEvent(t *testing.T) {
 	Ok(t, err)
 
 	expBaseRepo := models.Repo{
-		FullName:          "gitlabhq/gitlab-test",
-		Name:              "gitlab-test",
-		SanitizedCloneURL: "https://example.com/gitlabhq/gitlab-test.git",
-		Owner:             "gitlabhq",
-		CloneURL:          "https://gitlab-user:gitlab-token@example.com/gitlabhq/gitlab-test.git",
+		FullName:          "lkysow/atlantis-example",
+		Name:              "atlantis-example",
+		SanitizedCloneURL: "https://gitlab.com/lkysow/atlantis-example.git",
+		Owner:             "lkysow",
+		CloneURL:          "https://gitlab-user:gitlab-token@gitlab.com/lkysow/atlantis-example.git",
 		VCSHost: models.VCSHost{
-			Hostname: "example.com",
+			Hostname: "gitlab.com",
 			Type:     models.Gitlab,
 		},
 	}
 
 	Equals(t, models.PullRequest{
-		URL:        "http://example.com/diaspora/merge_requests/1",
-		Author:     "root",
-		Num:        1,
-		HeadCommit: "da1560886d4f094c3e6c9ef40349f7d38b5d27d7",
-		Branch:     "ms-viewport",
+		URL:        "https://gitlab.com/lkysow/atlantis-example/merge_requests/12",
+		Author:     "lkysow",
+		Num:        12,
+		HeadCommit: "d2eae324ca26242abca45d7b49d582cddb2a4f15",
+		HeadBranch: "patch-1",
+		BaseBranch: "master",
 		State:      models.OpenPullState,
 		BaseRepo:   expBaseRepo,
 	}, pull)
@@ -302,17 +310,17 @@ func TestParseGitlabMergeEvent(t *testing.T) {
 
 	Equals(t, expBaseRepo, actBaseRepo)
 	Equals(t, models.Repo{
-		FullName:          "awesome_space/awesome_project",
-		Name:              "awesome_project",
-		SanitizedCloneURL: "http://example.com/awesome_space/awesome_project.git",
-		Owner:             "awesome_space",
-		CloneURL:          "http://gitlab-user:gitlab-token@example.com/awesome_space/awesome_project.git",
+		FullName:          "sourceorg/atlantis-example",
+		Name:              "atlantis-example",
+		SanitizedCloneURL: "https://gitlab.com/sourceorg/atlantis-example.git",
+		Owner:             "sourceorg",
+		CloneURL:          "https://gitlab-user:gitlab-token@gitlab.com/sourceorg/atlantis-example.git",
 		VCSHost: models.VCSHost{
-			Hostname: "example.com",
+			Hostname: "gitlab.com",
 			Type:     models.Gitlab,
 		},
 	}, actHeadRepo)
-	Equals(t, models.User{Username: "root"}, actUser)
+	Equals(t, models.User{Username: "lkysow"}, actUser)
 
 	t.Log("If the state is closed, should set field correctly.")
 	event.ObjectAttributes.State = "closed"
@@ -350,7 +358,8 @@ func TestParseGitlabMergeEvent_Subgroup(t *testing.T) {
 		Author:     "lkysow",
 		Num:        2,
 		HeadCommit: "901d9770ef1a6862e2a73ec1bacc73590abb9aff",
-		Branch:     "patch",
+		HeadBranch: "patch",
+		BaseBranch: "master",
 		State:      models.OpenPullState,
 		BaseRepo:   expBaseRepo,
 	}, pull)
@@ -445,7 +454,8 @@ func TestParseGitlabMergeRequest(t *testing.T) {
 		Author:     "lkysow",
 		Num:        8,
 		HeadCommit: "0b4ac85ea3063ad5f2974d10cd68dd1f937aaac2",
-		Branch:     "abc",
+		HeadBranch: "abc",
+		BaseBranch: "master",
 		State:      models.OpenPullState,
 		BaseRepo:   repo,
 	}, pull)
@@ -483,7 +493,8 @@ func TestParseGitlabMergeRequest_Subgroup(t *testing.T) {
 		Author:     "lkysow",
 		Num:        2,
 		HeadCommit: "901d9770ef1a6862e2a73ec1bacc73590abb9aff",
-		Branch:     "patch",
+		HeadBranch: "patch",
+		BaseBranch: "master",
 		State:      models.OpenPullState,
 		BaseRepo:   repo,
 	}, pull)
@@ -590,18 +601,18 @@ func TestNewCommand_CleansDir(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.RepoRelDir, func(t *testing.T) {
-			cmd := events.NewCommentCommand(c.RepoRelDir, nil, events.PlanCommand, false, "workspace", "")
+			cmd := events.NewCommentCommand(c.RepoRelDir, nil, models.PlanCommand, false, "workspace", "")
 			Equals(t, c.ExpDir, cmd.RepoRelDir)
 		})
 	}
 }
 
 func TestNewCommand_EmptyDirWorkspaceProject(t *testing.T) {
-	cmd := events.NewCommentCommand("", nil, events.PlanCommand, false, "", "")
+	cmd := events.NewCommentCommand("", nil, models.PlanCommand, false, "", "")
 	Equals(t, events.CommentCommand{
 		RepoRelDir:  "",
 		Flags:       nil,
-		Name:        events.PlanCommand,
+		Name:        models.PlanCommand,
 		Verbose:     false,
 		Workspace:   "",
 		ProjectName: "",
@@ -609,19 +620,19 @@ func TestNewCommand_EmptyDirWorkspaceProject(t *testing.T) {
 }
 
 func TestNewCommand_AllFieldsSet(t *testing.T) {
-	cmd := events.NewCommentCommand("dir", []string{"a", "b"}, events.PlanCommand, true, "workspace", "project")
+	cmd := events.NewCommentCommand("dir", []string{"a", "b"}, models.PlanCommand, true, "workspace", "project")
 	Equals(t, events.CommentCommand{
 		Workspace:   "workspace",
 		RepoRelDir:  "dir",
 		Verbose:     true,
 		Flags:       []string{"a", "b"},
-		Name:        events.PlanCommand,
+		Name:        models.PlanCommand,
 		ProjectName: "project",
 	}, *cmd)
 }
 
 func TestAutoplanCommand_CommandName(t *testing.T) {
-	Equals(t, events.PlanCommand, (events.AutoplanCommand{}).CommandName())
+	Equals(t, models.PlanCommand, (events.AutoplanCommand{}).CommandName())
 }
 
 func TestAutoplanCommand_IsVerbose(t *testing.T) {
@@ -633,11 +644,11 @@ func TestAutoplanCommand_IsAutoplan(t *testing.T) {
 }
 
 func TestCommentCommand_CommandName(t *testing.T) {
-	Equals(t, events.PlanCommand, (events.CommentCommand{
-		Name: events.PlanCommand,
+	Equals(t, models.PlanCommand, (events.CommentCommand{
+		Name: models.PlanCommand,
 	}).CommandName())
-	Equals(t, events.ApplyCommand, (events.CommentCommand{
-		Name: events.ApplyCommand,
+	Equals(t, models.ApplyCommand, (events.CommentCommand{
+		Name: models.ApplyCommand,
 	}).CommandName())
 }
 
@@ -659,7 +670,7 @@ func TestCommentCommand_String(t *testing.T) {
 	Equals(t, exp, (events.CommentCommand{
 		RepoRelDir:  "mydir",
 		Flags:       []string{"flag1", "flag2"},
-		Name:        events.PlanCommand,
+		Name:        models.PlanCommand,
 		Verbose:     true,
 		Workspace:   "myworkspace",
 		ProjectName: "myproject",
@@ -707,7 +718,8 @@ func TestParseBitbucketCloudCommentEvent_ValidEvent(t *testing.T) {
 		Num:        2,
 		HeadCommit: "e0624da46d3a",
 		URL:        "https://bitbucket.org/lkysow/atlantis-example/pull-requests/2",
-		Branch:     "lkysow/maintf-edited-online-with-bitbucket-1532029690581",
+		HeadBranch: "lkysow/maintf-edited-online-with-bitbucket-1532029690581",
+		BaseBranch: "master",
 		Author:     "lkysow",
 		State:      models.ClosedPullState,
 		BaseRepo:   expBaseRepo,
@@ -792,7 +804,8 @@ func TestParseBitbucketCloudPullEvent_ValidEvent(t *testing.T) {
 		Num:        2,
 		HeadCommit: "e0624da46d3a",
 		URL:        "https://bitbucket.org/lkysow/atlantis-example/pull-requests/2",
-		Branch:     "lkysow/maintf-edited-online-with-bitbucket-1532029690581",
+		HeadBranch: "lkysow/maintf-edited-online-with-bitbucket-1532029690581",
+		BaseBranch: "master",
 		Author:     "lkysow",
 		State:      models.ClosedPullState,
 		BaseRepo:   expBaseRepo,
@@ -892,7 +905,8 @@ func TestParseBitbucketServerCommentEvent_ValidEvent(t *testing.T) {
 		Num:        1,
 		HeadCommit: "bfb1af1ba9c2a2fa84cd61af67e6e1b60a22e060",
 		URL:        "http://mycorp.com:7490/projects/AT/repos/atlantis-example/pull-requests/1",
-		Branch:     "branch",
+		HeadBranch: "branch",
+		BaseBranch: "master",
 		Author:     "lkysow",
 		State:      models.OpenPullState,
 		BaseRepo:   expBaseRepo,
@@ -973,7 +987,8 @@ func TestParseBitbucketServerPullEvent_ValidEvent(t *testing.T) {
 		Num:        2,
 		HeadCommit: "86a574157f5a2dadaf595b9f06c70fdfdd039912",
 		URL:        "http://mycorp.com:7490/projects/AT/repos/atlantis-example/pull-requests/2",
-		Branch:     "branch",
+		HeadBranch: "branch",
+		BaseBranch: "master",
 		Author:     "lkysow",
 		State:      models.ClosedPullState,
 		BaseRepo:   expBaseRepo,
@@ -1009,6 +1024,10 @@ func TestGetBitbucketServerEventType(t *testing.T) {
 		},
 		{
 			header: "pr:declined",
+			exp:    models.ClosedPullEvent,
+		},
+		{
+			header: "pr:deleted",
 			exp:    models.ClosedPullEvent,
 		},
 		{

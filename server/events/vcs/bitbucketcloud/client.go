@@ -8,13 +8,13 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/pkg/errors"
-	"gopkg.in/go-playground/validator.v9"
+	"github.com/runatlantis/atlantis/server/events/models"
+	validator "gopkg.in/go-playground/validator.v9"
 )
 
 type Client struct {
-	HttpClient  *http.Client
+	HTTPClient  *http.Client
 	Username    string
 	Password    string
 	BaseURL     string
@@ -30,7 +30,7 @@ func NewClient(httpClient *http.Client, username string, password string, atlant
 		httpClient = http.DefaultClient
 	}
 	return &Client{
-		HttpClient:  httpClient,
+		HTTPClient:  httpClient,
 		Username:    username,
 		Password:    password,
 		BaseURL:     BaseURL,
@@ -86,11 +86,16 @@ func (b *Client) GetModifiedFiles(repo models.Repo, pull models.PullRequest) ([]
 
 // CreateComment creates a comment on the merge request.
 func (b *Client) CreateComment(repo models.Repo, pullNum int, comment string) error {
-	bodyBytes, err := json.Marshal(map[string]string{"content": comment})
+	// NOTE: I tried to find the maximum size of a comment for bitbucket.org but
+	// I got up to 200k chars without issue so for now I'm not going to bother
+	// to detect this.
+	bodyBytes, err := json.Marshal(map[string]map[string]string{"content": {
+		"raw": comment,
+	}})
 	if err != nil {
 		return errors.Wrap(err, "json encoding")
 	}
-	path := fmt.Sprintf("%s/1.0/repositories/%s/pullrequests/%d/comments", b.BaseURL, repo.FullName, pullNum)
+	path := fmt.Sprintf("%s/2.0/repositories/%s/pullrequests/%d/comments", b.BaseURL, repo.FullName, pullNum)
 	_, err = b.makeRequest("POST", path, bytes.NewBuffer(bodyBytes))
 	return err
 }
@@ -141,7 +146,7 @@ func (b *Client) PullIsMergeable(repo models.Repo, pull models.PullRequest) (boo
 }
 
 // UpdateStatus updates the status of a commit.
-func (b *Client) UpdateStatus(repo models.Repo, pull models.PullRequest, status models.CommitStatus, description string) error {
+func (b *Client) UpdateStatus(repo models.Repo, pull models.PullRequest, status models.CommitStatus, src string, description string, url string) error {
 	bbState := "FAILED"
 	switch status {
 	case models.PendingCommitStatus:
@@ -152,9 +157,15 @@ func (b *Client) UpdateStatus(repo models.Repo, pull models.PullRequest, status 
 		bbState = "FAILED"
 	}
 
+	// URL is a required field for bitbucket statuses. We default to the
+	// Atlantis server's URL.
+	if url == "" {
+		url = b.AtlantisURL
+	}
+
 	bodyBytes, err := json.Marshal(map[string]string{
-		"key":         "atlantis",
-		"url":         b.AtlantisURL,
+		"key":         src,
+		"url":         url,
 		"state":       bbState,
 		"description": description,
 	})
@@ -167,13 +178,26 @@ func (b *Client) UpdateStatus(repo models.Repo, pull models.PullRequest, status 
 	return err
 }
 
-// prepRequest adds the HTTP basic auth.
+// MergePull merges the pull request.
+func (b *Client) MergePull(pull models.PullRequest) error {
+	path := fmt.Sprintf("%s/2.0/repositories/%s/pullrequests/%d/merge", b.BaseURL, pull.BaseRepo.FullName, pull.Num)
+	_, err := b.makeRequest("POST", path, nil)
+	return err
+}
+
+// prepRequest adds auth and necessary headers.
 func (b *Client) prepRequest(method string, path string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequest(method, path, body)
 	if err != nil {
 		return nil, err
 	}
 	req.SetBasicAuth(b.Username, b.Password)
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
+	}
+	// Add this header to disable CSRF checks.
+	// See https://confluence.atlassian.com/cloudkb/xsrf-check-failed-when-calling-cloud-apis-826874382.html
+	req.Header.Add("X-Atlassian-Token", "no-check")
 	return req, nil
 }
 
@@ -182,10 +206,7 @@ func (b *Client) makeRequest(method string, path string, reqBody io.Reader) ([]b
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing request")
 	}
-	if reqBody != nil {
-		req.Header.Add("Content-Type", "application/json")
-	}
-	resp, err := b.HttpClient.Do(req)
+	resp, err := b.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +222,4 @@ func (b *Client) makeRequest(method string, path string, reqBody io.Reader) ([]b
 		return nil, errors.Wrapf(err, "reading response from request %q", requestStr)
 	}
 	return respBody, nil
-}
-
-// GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
-func (g *Client) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
-	return nil, nil
 }

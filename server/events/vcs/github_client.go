@@ -16,18 +16,19 @@ package vcs
 import (
 	"context"
 	"fmt"
-	"math"
 	"net/url"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/common"
+
 	"github.com/google/go-github/github"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
 )
 
-// maxCommentBodySize is derived from the error message when you go over
-// this limit.
-const maxCommentBodySize = 65536
+// maxCommentLength is the maximum number of chars allowed in a single comment
+// by GitHub.
+const maxCommentLength = 65536
 
 // GithubClient is used to perform GitHub actions.
 type GithubClient struct {
@@ -78,6 +79,12 @@ func (g *GithubClient) GetModifiedFiles(repo models.Repo, pull models.PullReques
 		}
 		for _, f := range pageFiles {
 			files = append(files, f.GetFilename())
+
+			// If the file was renamed, we'll want to run plan in the directory
+			// it was moved from as well.
+			if f.GetStatus() == "renamed" {
+				files = append(files, f.GetPreviousFilename())
+			}
 		}
 		if resp.NextPage == 0 {
 			break
@@ -91,7 +98,12 @@ func (g *GithubClient) GetModifiedFiles(repo models.Repo, pull models.PullReques
 // If comment length is greater than the max comment length we split into
 // multiple comments.
 func (g *GithubClient) CreateComment(repo models.Repo, pullNum int, comment string) error {
-	comments := g.splitAtMaxChars(comment, maxCommentBodySize, "\ncontinued...\n")
+	sepEnd := "\n```\n</details>" +
+		"\n<br>\n\n**Warning**: Output length greater than max comment size. Continued in next comment."
+	sepStart := "Continued from previous comment.\n<details><summary>Show Output</summary>\n\n" +
+		"```diff\n"
+
+	comments := common.SplitComment(comment, maxCommentLength, sepEnd, sepStart)
 	for _, c := range comments {
 		_, _, err := g.client.Issues.CreateComment(g.ctx, repo.Owner, repo.Name, pullNum, &github.IssueComment{Body: &c})
 		if err != nil {
@@ -145,8 +157,7 @@ func (g *GithubClient) GetPullRequest(repo models.Repo, num int) (*github.PullRe
 
 // UpdateStatus updates the status badge on the pull request.
 // See https://github.com/blog/1227-commit-status-api.
-func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, description string) error {
-	const statusContext = "Atlantis"
+func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, state models.CommitStatus, src string, description string, url string) error {
 	ghState := "error"
 	switch state {
 	case models.PendingCommitStatus:
@@ -156,77 +167,55 @@ func (g *GithubClient) UpdateStatus(repo models.Repo, pull models.PullRequest, s
 	case models.FailedCommitStatus:
 		ghState = "failure"
 	}
+
 	status := &github.RepoStatus{
 		State:       github.String(ghState),
 		Description: github.String(description),
-		Context:     github.String(statusContext)}
+		Context:     github.String(src),
+		TargetURL:   &url,
+	}
 	_, _, err := g.client.Repositories.CreateStatus(g.ctx, repo.Owner, repo.Name, pull.HeadCommit, status)
 	return err
 }
 
-// splitAtMaxChars splits comment into a slice with string up to max
-// len separated by join which gets appended to the ends of the middle strings.
-// If max <= len(join) we return an empty slice since this is an edge case we
-// don't want to handle.
-// nolint: unparam
-func (g *GithubClient) splitAtMaxChars(comment string, max int, join string) []string {
-	// If we're under the limit then no need to split.
-	if len(comment) <= max {
-		return []string{comment}
+// MergePull merges the pull request.
+func (g *GithubClient) MergePull(pull models.PullRequest) error {
+	// Users can set their repo to disallow certain types of merging.
+	// We detect which types aren't allowed and use the type that is.
+	repo, _, err := g.client.Repositories.Get(g.ctx, pull.BaseRepo.Owner, pull.BaseRepo.Name)
+	if err != nil {
+		return errors.Wrap(err, "fetching repo info")
+	}
+	const (
+		defaultMergeMethod = "merge"
+		rebaseMergeMethod  = "rebase"
+		squashMergeMethod  = "squash"
+	)
+	method := defaultMergeMethod
+	if !repo.GetAllowMergeCommit() {
+		if repo.GetAllowRebaseMerge() {
+			method = rebaseMergeMethod
+		} else if repo.GetAllowSquashMerge() {
+			method = squashMergeMethod
+		}
 	}
 
-	// If we can't fit the joining string in then this doesn't make sense.
-	if max <= len(join) {
-		return nil
+	// Now we're ready to make our API call to merge the pull request.
+	options := &github.PullRequestOptions{
+		MergeMethod: method,
 	}
-
-	var comments []string
-	maxSize := max - len(join)
-	numComments := int(math.Ceil(float64(len(comment)) / float64(maxSize)))
-	for i := 0; i < numComments; i++ {
-		upTo := g.min(len(comment), (i+1)*maxSize)
-		portion := comment[i*maxSize : upTo]
-		if i < numComments-1 {
-			portion += join
-		}
-		comments = append(comments, portion)
+	mergeResult, _, err := g.client.PullRequests.Merge(
+		g.ctx,
+		pull.BaseRepo.Owner,
+		pull.BaseRepo.Name,
+		pull.Num,
+		common.AutomergeCommitMsg,
+		options)
+	if err != nil {
+		return errors.Wrap(err, "merging pull request")
 	}
-	return comments
-}
-
-func (g *GithubClient) min(a, b int) int {
-	if a < b {
-		return a
+	if !mergeResult.GetMerged() {
+		return fmt.Errorf("could not merge pull request: %s", mergeResult.GetMessage())
 	}
-	return b
-}
-
-// GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
-func (g *GithubClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
-	var teamNames []string
-	opts := &github.ListOptions{}
-	org := repo.Owner
-	for {
-		teams, resp, err := g.client.Teams.ListTeams(g.ctx, org, opts)
-		if err != nil {
-			return nil, err
-		}
-		for _, t := range teams {
-			membership, _, err := g.client.Teams.GetTeamMembership(g.ctx, t.GetID(), user.Username)
-			if err != nil {
-				return nil, err
-			}
-			if membership == nil {
-				return nil, errors.New("Failed to get Team membership for user")
-			}
-			if *membership.Role == "member" || *membership.Role == "maintainer" {
-				teamNames = append(teamNames, t.GetName())
-			}
-		}
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-	return teamNames, nil
+	return nil
 }

@@ -3,11 +3,11 @@ package raw_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/raw"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	. "github.com/cloudposse/atlantis/testing"
-	"github.com/go-ozzo/ozzo-validation"
-	"gopkg.in/yaml.v2"
+	validation "github.com/go-ozzo/ozzo-validation"
+	"github.com/runatlantis/atlantis/server/events/yaml/raw"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	. "github.com/runatlantis/atlantis/testing"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestStage_UnmarshalYAML(t *testing.T) {
@@ -58,7 +58,7 @@ func TestStage_Validate(t *testing.T) {
 		},
 	}
 	validation.ErrorTag = "yaml"
-	ErrEquals(t, "steps: (0: \"invalid\" is not a valid step type.).", s.Validate())
+	ErrEquals(t, "steps: (0: \"invalid\" is not a valid step type, maybe you omitted the 'run' key.).", s.Validate())
 
 	// Empty steps should validate.
 	Ok(t, (raw.Stage{}).Validate())

@@ -18,8 +18,8 @@ import (
 
 	"fmt"
 
-	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // SlackWebhook sends webhooks to Slack.

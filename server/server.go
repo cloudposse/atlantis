@@ -29,23 +29,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/locking"
-	"github.com/cloudposse/atlantis/server/events/locking/boltdb"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/runtime"
-	"github.com/cloudposse/atlantis/server/events/terraform"
-	"github.com/cloudposse/atlantis/server/events/vcs"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
-	"github.com/cloudposse/atlantis/server/events/webhooks"
-	"github.com/cloudposse/atlantis/server/events/yaml"
-	"github.com/cloudposse/atlantis/server/logging"
-	"github.com/cloudposse/atlantis/server/static"
-	"github.com/elazarl/go-bindata-assetfs"
+	"github.com/runatlantis/atlantis/server/events/db"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
-	"github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/locking"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/runtime"
+	"github.com/runatlantis/atlantis/server/events/terraform"
+	"github.com/runatlantis/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	"github.com/runatlantis/atlantis/server/events/webhooks"
+	"github.com/runatlantis/atlantis/server/events/yaml"
+	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/runatlantis/atlantis/server/static"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 )
@@ -64,6 +65,7 @@ const (
 // Server runs the Atlantis web server.
 type Server struct {
 	AtlantisVersion    string
+	AtlantisURL        *url.URL
 	Router             *mux.Router
 	Port               int
 	CommandRunner      *events.DefaultCommandRunner
@@ -77,49 +79,13 @@ type Server struct {
 	SSLKeyFile         string
 }
 
-// UserConfig holds config values passed in by the user.
-// The mapstructure tags correspond to flags in cmd/server.go and are used when
-// the config is parsed from a YAML file.
-type UserConfig struct {
-	AllowForkPRs           bool   `mapstructure:"allow-fork-prs"`
-	AllowRepoConfig        bool   `mapstructure:"allow-repo-config"`
-	AtlantisURL            string `mapstructure:"atlantis-url"`
-	BitbucketBaseURL       string `mapstructure:"bitbucket-base-url"`
-	BitbucketToken         string `mapstructure:"bitbucket-token"`
-	BitbucketUser          string `mapstructure:"bitbucket-user"`
-	BitbucketWebhookSecret string `mapstructure:"bitbucket-webhook-secret"`
-	DataDir                string `mapstructure:"data-dir"`
-	GithubHostname         string `mapstructure:"gh-hostname"`
-	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
-	GithubToken            string `mapstructure:"gh-token"`
-	GithubUser             string `mapstructure:"gh-user"`
-	GithubWebhookSecret    string `mapstructure:"gh-webhook-secret"`
-	GitlabHostname         string `mapstructure:"gitlab-hostname"`
-	GitlabToken            string `mapstructure:"gitlab-token"`
-	GitlabUser             string `mapstructure:"gitlab-user"`
-	GitlabWebhookSecret    string `mapstructure:"gitlab-webhook-secret"`
-	LogLevel               string `mapstructure:"log-level"`
-	Port                   int    `mapstructure:"port"`
-	RepoConfig             string `mapstructure:"repo-config"`
-	RepoWhitelist          string `mapstructure:"repo-whitelist"`
-	// RequireApproval is whether to require pull request approval before
-	// allowing terraform apply's to be run.
-	RequireApproval bool `mapstructure:"require-approval"`
-	// RequireMergeable is whether to require pull requests to be mergeable before
-	// allowing terraform apply's to run.
-	RequireMergeable bool            `mapstructure:"require-mergeable"`
-	SlackToken       string          `mapstructure:"slack-token"`
-	SSLCertFile      string          `mapstructure:"ssl-cert-file"`
-	SSLKeyFile       string          `mapstructure:"ssl-key-file"`
-	WakeWord         string          `mapstructure:"wake-word"`
-	Webhooks         []WebhookConfig `mapstructure:"webhooks"`
-}
-
 // Config holds config for server that isn't passed in by the user.
 type Config struct {
-	AllowForkPRsFlag    string
-	AllowRepoConfigFlag string
-	AtlantisVersion     string
+	AllowForkPRsFlag     string
+	AtlantisURLFlag      string
+	AtlantisVersion      string
+	DefaultTFVersionFlag string
+	RepoConfigJSONFlag   string
 }
 
 // WebhookConfig is nested within UserConfig. It's used to configure webhooks.
@@ -141,6 +107,7 @@ type WebhookConfig struct {
 // its dependencies an error will be returned. This is like the main() function
 // for the server CLI command because it injects all the dependencies.
 func NewServer(userConfig UserConfig, config Config) (*Server, error) {
+	logger := logging.NewSimpleLogger("server", false, userConfig.ToLogLevel())
 	var supportedVCSHosts []models.VCSHostType
 	var githubClient *vcs.GithubClient
 	var gitlabClient *vcs.GitlabClient
@@ -156,23 +123,10 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	}
 	if userConfig.GitlabUser != "" {
 		supportedVCSHosts = append(supportedVCSHosts, models.Gitlab)
-		gitlabClient = &vcs.GitlabClient{
-			Client: gitlab.NewClient(nil, userConfig.GitlabToken),
-		}
-		// If not using gitlab.com we need to set the URL to the API.
-		if userConfig.GitlabHostname != "gitlab.com" {
-			// Check if they've also provided a scheme so we don't prepend it
-			// again.
-			scheme := "https"
-			schemeSplit := strings.Split(userConfig.GitlabHostname, "://")
-			if len(schemeSplit) > 1 {
-				scheme = schemeSplit[0]
-				userConfig.GitlabHostname = schemeSplit[1]
-			}
-			apiURL := fmt.Sprintf("%s://%s/api/v4/", scheme, userConfig.GitlabHostname)
-			if err := gitlabClient.Client.SetBaseURL(apiURL); err != nil {
-				return nil, errors.Wrapf(err, "setting GitLab API URL: %s", apiURL)
-			}
+		var err error
+		gitlabClient, err = vcs.NewGitlabClient(userConfig.GitlabHostname, userConfig.GitlabToken, logger)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if userConfig.BitbucketUser != "" {
@@ -212,31 +166,54 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "initializing webhooks")
 	}
-	vcsClient := vcs.NewDefaultClientProxy(githubClient, gitlabClient, bitbucketCloudClient, bitbucketServerClient)
+	vcsClient := vcs.NewClientProxy(githubClient, gitlabClient, bitbucketCloudClient, bitbucketServerClient)
 	commitStatusUpdater := &events.DefaultCommitStatusUpdater{Client: vcsClient}
-	terraformClient, err := terraform.NewClient(userConfig.DataDir)
+	terraformClient, err := terraform.NewClient(logger, userConfig.DataDir, userConfig.TFEToken, userConfig.DefaultTFVersion, config.DefaultTFVersionFlag, &terraform.DefaultDownloader{})
 	// The flag.Lookup call is to detect if we're running in a unit test. If we
 	// are, then we don't error out because we don't have/want terraform
 	// installed on our CI system where the unit tests run.
 	if err != nil && flag.Lookup("test.v") == nil {
 		return nil, errors.Wrap(err, "initializing terraform")
 	}
-	markdownRenderer := &events.MarkdownRenderer{}
-	boltdb, err := boltdb.New(userConfig.DataDir)
+	markdownRenderer := &events.MarkdownRenderer{
+		GitlabSupportsCommonMark: gitlabClient.SupportsCommonMark(),
+	}
+	boltdb, err := db.New(userConfig.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	lockingClient := locking.NewClient(boltdb)
 	workingDirLocker := events.NewDefaultWorkingDirLocker()
 	workingDir := &events.FileWorkspace{
-		DataDir: userConfig.DataDir,
+		DataDir:       userConfig.DataDir,
+		CheckoutMerge: userConfig.CheckoutStrategy == "merge",
 	}
 	projectLocker := &events.DefaultProjectLocker{
 		Locker: lockingClient,
 	}
+	parsedURL, err := ParseAtlantisURL(userConfig.AtlantisURL)
+	if err != nil {
+		return nil, errors.Wrapf(err,
+			"parsing --%s flag %q", config.AtlantisURLFlag, userConfig.AtlantisURL)
+	}
+	validator := &yaml.ParserValidator{}
+
+	globalCfg := valid.NewGlobalCfg(userConfig.AllowRepoConfig, userConfig.RequireMergeable, userConfig.RequireApproval)
+	if userConfig.RepoConfig != "" {
+		globalCfg, err = validator.ParseGlobalCfg(userConfig.RepoConfig, globalCfg)
+		if err != nil {
+			return nil, errors.Wrapf(err, "parsing %s file", userConfig.RepoConfig)
+		}
+	} else if userConfig.RepoConfigJSON != "" {
+		globalCfg, err = validator.ParseGlobalCfgJSON(userConfig.RepoConfigJSON, globalCfg)
+		if err != nil {
+			return nil, errors.Wrapf(err, "parsing --%s", config.RepoConfigJSONFlag)
+		}
+	}
+
 	underlyingRouter := mux.NewRouter()
 	router := &Router{
-		AtlantisURL:               userConfig.AtlantisURL,
+		AtlantisURL:               parsedURL,
 		LockViewRouteIDQueryParam: LockViewRouteIDQueryParam,
 		LockViewRouteName:         LockViewRouteName,
 		Underlying:                underlyingRouter,
@@ -245,8 +222,9 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		VCSClient:  vcsClient,
 		Locker:     lockingClient,
 		WorkingDir: workingDir,
+		Logger:     logger,
+		DB:         boltdb,
 	}
-	logger := logging.NewSimpleLogger("server", nil, false, logging.ToLogLevel(userConfig.LogLevel))
 	eventParser := &events.EventParser{
 		GithubUser:         userConfig.GithubUser,
 		GithubToken:        userConfig.GithubToken,
@@ -257,13 +235,12 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		BitbucketServerURL: userConfig.BitbucketBaseURL,
 	}
 	commentParser := &events.CommentParser{
-		GithubUser:  userConfig.GithubUser,
-		GithubToken: userConfig.GithubToken,
-		GitlabUser:  userConfig.GitlabUser,
-		GitlabToken: userConfig.GitlabToken,
-		WakeWord:    userConfig.WakeWord,
+		GithubUser:    userConfig.GithubUser,
+		GitlabUser:    userConfig.GitlabUser,
+		BitbucketUser: userConfig.BitbucketUser,
 	}
-	defaultTfVersion := terraformClient.Version()
+	defaultTfVersion := terraformClient.DefaultVersion()
+	pendingPlanFinder := &events.DefaultPendingPlanFinder{}
 	commandRunner := &events.DefaultCommandRunner{
 		VCSClient:                vcsClient,
 		GithubPullGetter:         githubClient,
@@ -275,16 +252,14 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		AllowForkPRs:             userConfig.AllowForkPRs,
 		AllowForkPRsFlag:         config.AllowForkPRsFlag,
 		ProjectCommandBuilder: &events.DefaultProjectCommandBuilder{
-			ParserValidator:     &yaml.ParserValidator{},
-			ProjectFinder:       &events.DefaultProjectFinder{},
-			VCSClient:           vcsClient,
-			WorkingDir:          workingDir,
-			WorkingDirLocker:    workingDirLocker,
-			AllowRepoConfig:     userConfig.AllowRepoConfig,
-			AllowRepoConfigFlag: config.AllowRepoConfigFlag,
-			RepoConfig:          userConfig.RepoConfig,
-			PendingPlanFinder:   &events.PendingPlanFinder{},
-			CommentBuilder:      commentParser,
+			ParserValidator:   validator,
+			ProjectFinder:     &events.DefaultProjectFinder{},
+			VCSClient:         vcsClient,
+			WorkingDir:        workingDir,
+			WorkingDirLocker:  workingDirLocker,
+			GlobalCfg:         globalCfg,
+			PendingPlanFinder: pendingPlanFinder,
+			CommentBuilder:    commentParser,
 		},
 		ProjectCommandRunner: &events.DefaultProjectCommandRunner{
 			Locker:           projectLocker,
@@ -294,42 +269,43 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 				DefaultTFVersion:  defaultTfVersion,
 			},
 			PlanStepRunner: &runtime.PlanStepRunner{
-				TerraformExecutor: terraformClient,
-				DefaultTFVersion:  defaultTfVersion,
+				TerraformExecutor:   terraformClient,
+				DefaultTFVersion:    defaultTfVersion,
+				CommitStatusUpdater: commitStatusUpdater,
+				AsyncTFExec:         terraformClient,
 			},
 			ApplyStepRunner: &runtime.ApplyStepRunner{
-				TerraformExecutor: terraformClient,
-			},
-			DestroyStepRunner: &runtime.DestroyStepRunner{
-				TerraformExecutor: terraformClient,
+				TerraformExecutor:   terraformClient,
+				CommitStatusUpdater: commitStatusUpdater,
+				AsyncTFExec:         terraformClient,
 			},
 			RunStepRunner: &runtime.RunStepRunner{
 				DefaultTFVersion: defaultTfVersion,
 			},
-			PullApprovedChecker:      vcsClient,
-			WorkingDir:               workingDir,
-			Webhooks:                 webhooksManager,
-			WorkingDirLocker:         workingDirLocker,
-			RequireApprovalOverride:  userConfig.RequireApproval,
-			RequireMergeableOverride: userConfig.RequireMergeable,
+			PullApprovedChecker: vcsClient,
+			WorkingDir:          workingDir,
+			Webhooks:            webhooksManager,
+			WorkingDirLocker:    workingDirLocker,
 		},
+		WorkingDir:        workingDir,
+		PendingPlanFinder: pendingPlanFinder,
+		DB:                boltdb,
+		GlobalAutomerge:   userConfig.Automerge,
 	}
 	repoWhitelist, err := events.NewRepoWhitelistChecker(userConfig.RepoWhitelist)
 	if err != nil {
 		return nil, err
 	}
-	githubTeamWhitelistChecker, err := events.NewTeamWhitelistChecker(userConfig.GithubTeamWhitelist)
-	if err != nil {
-		return nil, err
-	}
 	locksController := &LocksController{
 		AtlantisVersion:    config.AtlantisVersion,
+		AtlantisURL:        parsedURL,
 		Locker:             lockingClient,
 		Logger:             logger,
 		VCSClient:          vcsClient,
 		LockDetailTemplate: lockTemplate,
 		WorkingDir:         workingDir,
 		WorkingDirLocker:   workingDirLocker,
+		DB:                 boltdb,
 	}
 	eventsController := &EventsController{
 		CommandRunner:                commandRunner,
@@ -339,16 +315,17 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		Logger:                       logger,
 		GithubWebhookSecret:          []byte(userConfig.GithubWebhookSecret),
 		GithubRequestValidator:       &DefaultGithubRequestValidator{},
-		TeamWhitelistChecker:         githubTeamWhitelistChecker,
 		GitlabRequestParserValidator: &DefaultGitlabRequestParserValidator{},
 		GitlabWebhookSecret:          []byte(userConfig.GitlabWebhookSecret),
 		RepoWhitelistChecker:         repoWhitelist,
+		SilenceWhitelistErrors:       userConfig.SilenceWhitelistErrors,
 		SupportedVCSHosts:            supportedVCSHosts,
 		VCSClient:                    vcsClient,
 		BitbucketWebhookSecret:       []byte(userConfig.BitbucketWebhookSecret),
 	}
 	return &Server{
 		AtlantisVersion:    config.AtlantisVersion,
+		AtlantisURL:        parsedURL,
 		Router:             underlyingRouter,
 		Port:               userConfig.Port,
 		CommandRunner:      commandRunner,
@@ -398,8 +375,7 @@ func (s *Server) Start() error {
 			err = server.ListenAndServe()
 		}
 
-		if err != nil {
-			// When shutdown safely, there will be no error.
+		if err != nil && err != http.ErrServerClosed {
 			s.Logger.Err(err.Error())
 		}
 	}()
@@ -426,17 +402,22 @@ func (s *Server) Index(w http.ResponseWriter, _ *http.Request) {
 	for id, v := range locks {
 		lockURL, _ := s.Router.Get(LockViewRouteName).URL("id", url.QueryEscape(id))
 		lockResults = append(lockResults, LockIndexData{
-			LockURL:      lockURL.String(),
+			// NOTE: must use .String() instead of .Path because we need the
+			// query params as part of the lock URL.
+			LockPath:     lockURL.String(),
 			RepoFullName: v.Project.RepoFullName,
 			PullNum:      v.Pull.Num,
 			Time:         v.Time,
 		})
 	}
-	// nolint: errcheck
-	s.IndexTemplate.Execute(w, IndexData{
+	err = s.IndexTemplate.Execute(w, IndexData{
 		Locks:           lockResults,
 		AtlantisVersion: s.AtlantisVersion,
+		CleanedBasePath: s.AtlantisURL.Path,
 	})
+	if err != nil {
+		s.Logger.Err(err.Error())
+	}
 }
 
 // Healthz returns the health check response. It always returns a 200 currently.
@@ -453,4 +434,22 @@ func (s *Server) Healthz(w http.ResponseWriter, _ *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data) // nolint: errcheck
+}
+
+// ParseAtlantisURL parses the user-passed atlantis URL to ensure it is valid
+// and we can use it in our templates.
+// It removes any trailing slashes from the path so we can concatenate it
+// with other paths without checking.
+func ParseAtlantisURL(u string) (*url.URL, error) {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+	if !(parsed.Scheme == "http" || parsed.Scheme == "https") {
+		return nil, errors.New("http or https must be specified")
+	}
+	// We want the path to end without a trailing slash so we know how to
+	// use it in the rest of the program.
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+	return parsed, nil
 }

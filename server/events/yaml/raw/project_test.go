@@ -3,12 +3,12 @@ package raw_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/raw"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	. "github.com/cloudposse/atlantis/testing"
-	"github.com/go-ozzo/ozzo-validation"
-	"github.com/hashicorp/go-version"
-	"gopkg.in/yaml.v2"
+	validation "github.com/go-ozzo/ozzo-validation"
+	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/events/yaml/raw"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	. "github.com/runatlantis/atlantis/testing"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestProject_UnmarshalYAML(t *testing.T) {
@@ -31,7 +31,7 @@ func TestProject_UnmarshalYAML(t *testing.T) {
 			},
 		},
 		{
-			description: "all fields set",
+			description: "all fields set including mergeable apply requirement",
 			input: `
 name: myname
 dir: mydir
@@ -101,13 +101,29 @@ func TestProject_Validate(t *testing.T) {
 				Dir:               String("."),
 				ApplyRequirements: []string{"unsupported"},
 			},
-			expErr: "apply_requirements: \"unsupported\" not supported, only approved is supported.",
+			expErr: "apply_requirements: \"unsupported\" is not a valid apply_requirement, only \"approved\" and \"mergeable\" are supported.",
 		},
 		{
-			description: "apply reqs with valid",
+			description: "apply reqs with approved requirement",
 			input: raw.Project{
 				Dir:               String("."),
 				ApplyRequirements: []string{"approved"},
+			},
+			expErr: "",
+		},
+		{
+			description: "apply reqs with mergeable requirement",
+			input: raw.Project{
+				Dir:               String("."),
+				ApplyRequirements: []string{"mergeable"},
+			},
+			expErr: "",
+		},
+		{
+			description: "apply reqs with mergeable and approved requirements",
+			input: raw.Project{
+				Dir:               String("."),
+				ApplyRequirements: []string{"mergeable", "approved"},
 			},
 			expErr: "",
 		},
@@ -143,6 +159,46 @@ func TestProject_Validate(t *testing.T) {
 			},
 			expErr: "name: if set cannot be empty.",
 		},
+		{
+			description: "project name with slashes",
+			input: raw.Project{
+				Dir:  String("."),
+				Name: String("my/name"),
+			},
+			expErr: "",
+		},
+		{
+			description: "project name with emoji",
+			input: raw.Project{
+				Dir:  String("."),
+				Name: String("😀"),
+			},
+			expErr: "name: \"😀\" is not allowed: must contain only URL safe characters.",
+		},
+		{
+			description: "project name with spaces",
+			input: raw.Project{
+				Dir:  String("."),
+				Name: String("name with spaces"),
+			},
+			expErr: "name: \"name with spaces\" is not allowed: must contain only URL safe characters.",
+		},
+		{
+			description: "project name with +",
+			input: raw.Project{
+				Dir:  String("."),
+				Name: String("namewith+"),
+			},
+			expErr: "name: \"namewith+\" is not allowed: must contain only URL safe characters.",
+		},
+		{
+			description: `project name with \`,
+			input: raw.Project{
+				Dir:  String("."),
+				Name: String(`namewith\`),
+			},
+			expErr: `name: "namewith\\" is not allowed: must contain only URL safe characters.`,
+		},
 	}
 	validation.ErrorTag = "yaml"
 	for _, c := range cases {
@@ -172,7 +228,7 @@ func TestProject_ToValid(t *testing.T) {
 			exp: valid.Project{
 				Dir:              ".",
 				Workspace:        "default",
-				Workflow:         nil,
+				WorkflowName:     nil,
 				TerraformVersion: nil,
 				Autoplan: valid.Autoplan{
 					WhenModified: []string{"**/*.tf*"},
@@ -199,7 +255,7 @@ func TestProject_ToValid(t *testing.T) {
 			exp: valid.Project{
 				Dir:              ".",
 				Workspace:        "myworkspace",
-				Workflow:         String("myworkflow"),
+				WorkflowName:     String("myworkflow"),
 				TerraformVersion: tfVersionPointEleven,
 				Autoplan: valid.Autoplan{
 					WhenModified: []string{"hi"},

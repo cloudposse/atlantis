@@ -14,22 +14,22 @@
 package events
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/Masterminds/semver"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 const workingDirPrefix = "repos"
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_working_dir.go WorkingDir
+//go:generate pegomock generate -m --use-experimental-model-gen --package events WorkingDir
 
 // WorkingDir handles the workspace on disk for running commands.
 type WorkingDir interface {
@@ -48,9 +48,17 @@ type WorkingDir interface {
 // FileWorkspace implements WorkingDir with the file system.
 type FileWorkspace struct {
 	DataDir string
-	// TestingOverrideCloneURL can be used during testing to override the URL
-	// that is cloned. If it's empty then we clone normally.
-	TestingOverrideCloneURL string
+	// CheckoutMerge is true if we should check out the branch that corresponds
+	// to what the base branch will look like *after* the pull request is merged.
+	// If this is false, then we will check out the head branch from the pull
+	// request.
+	CheckoutMerge bool
+	// TestingOverrideHeadCloneURL can be used during testing to override the
+	// URL of the head repo to be cloned. If it's empty then we clone normally.
+	TestingOverrideHeadCloneURL string
+	// TestingOverrideBaseCloneURL can be used during testing to override the
+	// URL of the base repo to be cloned. If it's empty then we clone normally.
+	TestingOverrideBaseCloneURL string
 }
 
 // Clone git clones headRepo, checks out the branch and then returns the absolute
@@ -69,11 +77,21 @@ func (w *FileWorkspace) Clone(
 	// If so, then we do nothing.
 	if _, err := os.Stat(cloneDir); err == nil {
 		log.Debug("clone directory %q already exists, checking if it's at the right commit", cloneDir)
-		revParseCmd := exec.Command("git", "rev-parse", "HEAD") // #nosec
+
+		// We use git rev-parse to see if our repo is at the right commit.
+		// If just checking out the pull request branch, we can use HEAD.
+		// If doing a merge, then HEAD won't be at the pull request's HEAD
+		// because we'll already have performed a merge. Instead, we'll check
+		// HEAD^2 since that will be the commit before our merge.
+		pullHead := "HEAD"
+		if w.CheckoutMerge {
+			pullHead = "HEAD^2"
+		}
+		revParseCmd := exec.Command("git", "rev-parse", pullHead) // #nosec
 		revParseCmd.Dir = cloneDir
 		output, err := revParseCmd.CombinedOutput()
 		if err != nil {
-			log.Err("will re-clone repo, could not determine if was at correct commit: git rev-parse HEAD: %s: %s", err, string(output))
+			log.Warn("will re-clone repo, could not determine if was at correct commit: %s: %s: %s", strings.Join(revParseCmd.Args, " "), err, string(output))
 			return w.forceClone(log, cloneDir, headRepo, p)
 		}
 		currCommit := strings.Trim(string(output), "\n")
@@ -91,40 +109,6 @@ func (w *FileWorkspace) Clone(
 	return w.forceClone(log, cloneDir, headRepo, p)
 }
 
-// GetGitVersion finds git version on the workstation
-func GetGitVersion() (*semver.Version, error) {
-	gitVersionOutput, err := exec.Command("git", "version").CombinedOutput()
-	if err != nil {
-		return nil, err
-	}
-	r := regexp.MustCompile(`(?:git version)\s(\d+\.\d+\.\d+)`)
-	gitVersion := semver.MustParse(r.FindStringSubmatch(string(gitVersionOutput))[1])
-	return gitVersion, nil
-}
-
-// CreateGitCloneCommand checks git version and creates 'git clone' command with different arguments depending on git version
-// https://stackoverflow.com/questions/3796927/how-to-git-clone-including-submodules/4438292#4438292
-func CreateGitCloneCommand(gitVersion *semver.Version, cloneURL string, cloneDir string) (*exec.Cmd, error) {
-	minimalGitVersion165, err := semver.NewConstraint(">= 1.6.5")
-	if err != nil {
-		return nil, errors.Wrap(err, "creating semver constraint for git version >= 1.6.5")
-	}
-	minimalGitVersion213, err := semver.NewConstraint(">= 2.13")
-	if err != nil {
-		return nil, errors.Wrap(err, "creating semver constraint for git version >= 2.13")
-	}
-
-	var cloneCmd *exec.Cmd
-	if minimalGitVersion213.Check(gitVersion) {
-		cloneCmd = exec.Command("git", "clone", "--recurse-submodules", cloneURL, cloneDir) // #nosec
-	} else if minimalGitVersion165.Check(gitVersion) {
-		cloneCmd = exec.Command("git", "clone", "--recursive", cloneURL, cloneDir) // #nosec
-	} else {
-		cloneCmd = exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
-	}
-	return cloneCmd, nil
-}
-
 func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 	cloneDir string,
 	headRepo models.Repo,
@@ -135,46 +119,73 @@ func (w *FileWorkspace) forceClone(log *logging.SimpleLogger,
 		return "", errors.Wrapf(err, "deleting dir %q before cloning", cloneDir)
 	}
 
-	// Create the directory and parents if necessary
+	// Create the directory and parents if necessary.
 	log.Info("creating dir %q", cloneDir)
 	if err := os.MkdirAll(cloneDir, 0700); err != nil {
 		return "", errors.Wrap(err, "creating new workspace")
 	}
 
-	log.Info("git cloning %q into %q", headRepo.SanitizedCloneURL, cloneDir)
-	cloneURL := headRepo.CloneURL
-	if w.TestingOverrideCloneURL != "" {
-		cloneURL = w.TestingOverrideCloneURL
+	// During testing, we mock some of this out.
+	headCloneURL := headRepo.CloneURL
+	if w.TestingOverrideHeadCloneURL != "" {
+		headCloneURL = w.TestingOverrideHeadCloneURL
+	}
+	baseCloneURL := p.BaseRepo.CloneURL
+	if w.TestingOverrideBaseCloneURL != "" {
+		baseCloneURL = w.TestingOverrideBaseCloneURL
 	}
 
-	var cmd *exec.Cmd
-
-	// Clone the repo
-	log.Info("cloning repo %q", cloneURL)
-	cmd = exec.Command("git", "clone", cloneURL, cloneDir) // #nosec
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", errors.Wrapf(err, "cloning repo %s: %s", headRepo.SanitizedCloneURL, string(output))
+	var cmds [][]string
+	if w.CheckoutMerge {
+		// NOTE: We can't do a shallow clone when we're merging because we'll
+		// get merge conflicts if our clone doesn't have the commits that the
+		// branch we're merging branched off at.
+		// See https://groups.google.com/forum/#!topic/git-users/v3MkuuiDJ98.
+		cmds = [][]string{
+			{
+				"git", "clone", "--branch", p.BaseBranch, "--single-branch", baseCloneURL, cloneDir,
+			},
+			{
+				"git", "remote", "add", "head", headCloneURL,
+			},
+			{
+				"git", "fetch", "head", fmt.Sprintf("+refs/heads/%s:", p.HeadBranch),
+			},
+			// We use --no-ff because we always want there to be a merge commit.
+			// This way, our branch will look the same regardless if the merge
+			// could be fast forwarded. This is useful later when we run
+			// git rev-parse HEAD^2 to get the head commit because it will
+			// always succeed whereas without --no-ff, if the merge was fast
+			// forwarded then git rev-parse HEAD^2 would fail.
+			{
+				"git", "merge", "-q", "--no-ff", "-m", "atlantis-merge", "FETCH_HEAD",
+			},
+		}
+	} else {
+		cmds = [][]string{
+			{
+				"git", "clone", "--branch", p.HeadBranch, "--depth=1", "--single-branch", headCloneURL, cloneDir,
+			},
+		}
 	}
 
-	// Checkout the branch for this PR
-	log.Info("checking out branch %q", p.Branch)
-	cmd = exec.Command("git", "checkout", p.Branch) // #nosec
-	cmd.Dir = cloneDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", errors.Wrapf(err, "checking out branch %q: %s", p.Branch, string(output))
-	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...) // nolint: gosec
+		cmd.Dir = cloneDir
+		// The git merge command requires these env vars are set.
+		cmd.Env = append(os.Environ(), []string{
+			"EMAIL=atlantis@runatlants.io",
+			"GIT_AUTHOR_NAME=atlantis",
+			"GIT_COMMITTER_NAME=atlantis",
+		}...)
 
-	// Recursively update submodules for the branch
-	// https://blog.github.com/2016-02-01-working-with-submodules
-	// https://git-scm.com/book/en/v2/Git-Tools-Submodules
-	// https://stackoverflow.com/questions/15124430/how-to-checkout-old-git-commit-including-all-submodules-recursively/29156667#29156667
-	log.Info("updating submodules for branch %q", p.Branch)
-	cmd = exec.Command("git", "submodule", "update", "--init", "--recursive") // #nosec
-	cmd.Dir = cloneDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return "", errors.Wrapf(err, "updating submodules for branch %q: %s", p.Branch, string(output))
+		cmdStr := w.cmdAsSanitizedStr(cmd, p.BaseRepo, headRepo)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", errors.Wrapf(err, "running %s: %s", cmdStr, string(output))
+		}
+		log.Debug("ran: %s. Output: %s", cmdStr, strings.TrimSuffix(string(output), "\n"))
 	}
-
 	return cloneDir, nil
 }
 
@@ -213,4 +224,10 @@ func (w *FileWorkspace) repoPullDir(r models.Repo, p models.PullRequest) string 
 
 func (w *FileWorkspace) cloneDir(r models.Repo, p models.PullRequest, workspace string) string {
 	return filepath.Join(w.repoPullDir(r, p), workspace)
+}
+
+func (w *FileWorkspace) cmdAsSanitizedStr(cmd *exec.Cmd, base models.Repo, head models.Repo) string {
+	cmdAsStr := strings.Join(cmd.Args, " ")
+	baseReplaced := strings.Replace(cmdAsStr, base.CloneURL, base.SanitizedCloneURL, -1)
+	return strings.Replace(baseReplaced, head.CloneURL, head.SanitizedCloneURL, -1)
 }

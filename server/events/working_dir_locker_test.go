@@ -16,8 +16,8 @@ package events_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var repo = "repo/owner"

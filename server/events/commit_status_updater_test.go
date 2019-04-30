@@ -14,124 +14,229 @@
 package events_test
 
 import (
-	"errors"
-	"strings"
+	"fmt"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs/mocks"
-	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/mocks"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
-var repoModel = models.Repo{}
-var pullModel = models.PullRequest{}
-var status = models.SuccessCommitStatus
-
-func TestUpdate(t *testing.T) {
-	RegisterMockTestingT(t)
-	client := mocks.NewMockClientProxy()
-	s := events.DefaultCommitStatusUpdater{Client: client}
-	err := s.Update(repoModel, pullModel, status, events.PlanCommand)
-	Ok(t, err)
-	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, status, "Plan Success")
-}
-
-func TestUpdateProjectResult_Error(t *testing.T) {
-	RegisterMockTestingT(t)
-	ctx := &events.CommandContext{
-		BaseRepo: repoModel,
-		Pull:     pullModel,
-	}
-	client := mocks.NewMockClientProxy()
-	s := events.DefaultCommitStatusUpdater{Client: client}
-	err := s.UpdateProjectResult(ctx, events.PlanCommand, events.CommandResult{Error: errors.New("err")})
-	Ok(t, err)
-	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, models.FailedCommitStatus, "Plan Failed")
-}
-
-func TestUpdateProjectResult_Failure(t *testing.T) {
-	RegisterMockTestingT(t)
-	ctx := &events.CommandContext{
-		BaseRepo: repoModel,
-		Pull:     pullModel,
-	}
-	client := mocks.NewMockClientProxy()
-	s := events.DefaultCommitStatusUpdater{Client: client}
-	err := s.UpdateProjectResult(ctx, events.PlanCommand, events.CommandResult{Failure: "failure"})
-	Ok(t, err)
-	client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, models.FailedCommitStatus, "Plan Failed")
-}
-
-func TestUpdateProjectResult(t *testing.T) {
-	RegisterMockTestingT(t)
-
-	ctx := &events.CommandContext{
-		BaseRepo: repoModel,
-		Pull:     pullModel,
-	}
-
+func TestUpdateCombined(t *testing.T) {
 	cases := []struct {
-		Statuses []string
-		Expected models.CommitStatus
+		status     models.CommitStatus
+		command    models.CommandName
+		expDescrip string
 	}{
 		{
-			[]string{"success", "failure", "error"},
-			models.FailedCommitStatus,
+			status:     models.PendingCommitStatus,
+			command:    models.PlanCommand,
+			expDescrip: "Plan in progress...",
 		},
 		{
-			[]string{"failure", "error", "success"},
-			models.FailedCommitStatus,
+			status:     models.FailedCommitStatus,
+			command:    models.PlanCommand,
+			expDescrip: "Plan failed.",
 		},
 		{
-			[]string{"success", "failure"},
-			models.FailedCommitStatus,
+			status:     models.SuccessCommitStatus,
+			command:    models.PlanCommand,
+			expDescrip: "Plan succeeded.",
 		},
 		{
-			[]string{"success", "error"},
-			models.FailedCommitStatus,
+			status:     models.PendingCommitStatus,
+			command:    models.ApplyCommand,
+			expDescrip: "Apply in progress...",
 		},
 		{
-			[]string{"failure", "error"},
-			models.FailedCommitStatus,
+			status:     models.FailedCommitStatus,
+			command:    models.ApplyCommand,
+			expDescrip: "Apply failed.",
 		},
 		{
-			[]string{"success"},
-			models.SuccessCommitStatus,
-		},
-		{
-			[]string{"success", "success"},
-			models.SuccessCommitStatus,
+			status:     models.SuccessCommitStatus,
+			command:    models.ApplyCommand,
+			expDescrip: "Apply succeeded.",
 		},
 	}
 
 	for _, c := range cases {
-		t.Run(strings.Join(c.Statuses, "-"), func(t *testing.T) {
-			var results []events.ProjectResult
-			for _, statusStr := range c.Statuses {
-				var result events.ProjectResult
-				switch statusStr {
-				case "failure":
-					result = events.ProjectResult{
-						Failure: "failure",
-					}
-				case "error":
-					result = events.ProjectResult{
-						Error: errors.New("err"),
-					}
-				default:
-					result = events.ProjectResult{}
-				}
-				results = append(results, result)
-			}
-			resp := events.CommandResult{ProjectResults: results}
-
-			client := mocks.NewMockClientProxy()
+		t.Run(c.expDescrip, func(t *testing.T) {
+			RegisterMockTestingT(t)
+			client := mocks.NewMockClient()
 			s := events.DefaultCommitStatusUpdater{Client: client}
-			err := s.UpdateProjectResult(ctx, events.PlanCommand, resp)
+			err := s.UpdateCombined(models.Repo{}, models.PullRequest{}, c.status, c.command)
 			Ok(t, err)
-			client.VerifyWasCalledOnce().UpdateStatus(repoModel, pullModel, c.Expected, "Plan "+strings.Title(c.Expected.String()))
+
+			expSrc := fmt.Sprintf("atlantis/%s", c.command)
+			client.VerifyWasCalledOnce().UpdateStatus(models.Repo{}, models.PullRequest{}, c.status, expSrc, c.expDescrip, "")
+		})
+	}
+}
+
+func TestUpdateCombinedCount(t *testing.T) {
+	cases := []struct {
+		status     models.CommitStatus
+		command    models.CommandName
+		numSuccess int
+		numTotal   int
+		expDescrip string
+	}{
+		{
+			status:     models.PendingCommitStatus,
+			command:    models.PlanCommand,
+			numSuccess: 0,
+			numTotal:   2,
+			expDescrip: "0/2 projects planned successfully.",
+		},
+		{
+			status:     models.FailedCommitStatus,
+			command:    models.PlanCommand,
+			numSuccess: 1,
+			numTotal:   2,
+			expDescrip: "1/2 projects planned successfully.",
+		},
+		{
+			status:     models.SuccessCommitStatus,
+			command:    models.PlanCommand,
+			numSuccess: 2,
+			numTotal:   2,
+			expDescrip: "2/2 projects planned successfully.",
+		},
+		{
+			status:     models.FailedCommitStatus,
+			command:    models.ApplyCommand,
+			numSuccess: 0,
+			numTotal:   2,
+			expDescrip: "0/2 projects applied successfully.",
+		},
+		{
+			status:     models.PendingCommitStatus,
+			command:    models.ApplyCommand,
+			numSuccess: 1,
+			numTotal:   2,
+			expDescrip: "1/2 projects applied successfully.",
+		},
+		{
+			status:     models.SuccessCommitStatus,
+			command:    models.ApplyCommand,
+			numSuccess: 2,
+			numTotal:   2,
+			expDescrip: "2/2 projects applied successfully.",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.expDescrip, func(t *testing.T) {
+			RegisterMockTestingT(t)
+			client := mocks.NewMockClient()
+			s := events.DefaultCommitStatusUpdater{Client: client}
+			err := s.UpdateCombinedCount(models.Repo{}, models.PullRequest{}, c.status, c.command, c.numSuccess, c.numTotal)
+			Ok(t, err)
+
+			expSrc := fmt.Sprintf("atlantis/%s", c.command)
+			client.VerifyWasCalledOnce().UpdateStatus(models.Repo{}, models.PullRequest{}, c.status, expSrc, c.expDescrip, "")
+		})
+	}
+}
+
+// Test that it sets the "source" properly depending on if the project is
+// named or not.
+func TestDefaultCommitStatusUpdater_UpdateProjectSrc(t *testing.T) {
+	RegisterMockTestingT(t)
+	cases := []struct {
+		projectName string
+		repoRelDir  string
+		workspace   string
+		expSrc      string
+	}{
+		{
+			projectName: "name",
+			repoRelDir:  ".",
+			workspace:   "default",
+			expSrc:      "atlantis/plan: name",
+		},
+		{
+			projectName: "",
+			repoRelDir:  "dir1/dir2",
+			workspace:   "workspace",
+			expSrc:      "atlantis/plan: dir1/dir2/workspace",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.expSrc, func(t *testing.T) {
+			client := mocks.NewMockClient()
+			s := events.DefaultCommitStatusUpdater{Client: client}
+			err := s.UpdateProject(models.ProjectCommandContext{
+				ProjectName: c.projectName,
+				RepoRelDir:  c.repoRelDir,
+				Workspace:   c.workspace,
+			},
+				models.PlanCommand,
+				models.PendingCommitStatus,
+				"url")
+			Ok(t, err)
+			client.VerifyWasCalledOnce().UpdateStatus(models.Repo{}, models.PullRequest{}, models.PendingCommitStatus, c.expSrc, "Plan in progress...", "url")
+		})
+	}
+}
+
+// Test that it uses the right words in the description.
+func TestDefaultCommitStatusUpdater_UpdateProject(t *testing.T) {
+	RegisterMockTestingT(t)
+	cases := []struct {
+		status     models.CommitStatus
+		cmd        models.CommandName
+		expDescrip string
+	}{
+		{
+			models.PendingCommitStatus,
+			models.PlanCommand,
+			"Plan in progress...",
+		},
+		{
+			models.FailedCommitStatus,
+			models.PlanCommand,
+			"Plan failed.",
+		},
+		{
+			models.SuccessCommitStatus,
+			models.PlanCommand,
+			"Plan succeeded.",
+		},
+		{
+			models.PendingCommitStatus,
+			models.ApplyCommand,
+			"Apply in progress...",
+		},
+		{
+			models.FailedCommitStatus,
+			models.ApplyCommand,
+			"Apply failed.",
+		},
+		{
+			models.SuccessCommitStatus,
+			models.ApplyCommand,
+			"Apply succeeded.",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.expDescrip, func(t *testing.T) {
+			client := mocks.NewMockClient()
+			s := events.DefaultCommitStatusUpdater{Client: client}
+			err := s.UpdateProject(models.ProjectCommandContext{
+				RepoRelDir: ".",
+				Workspace:  "default",
+			},
+				c.cmd,
+				c.status,
+				"url")
+			Ok(t, err)
+			client.VerifyWasCalledOnce().UpdateStatus(models.Repo{}, models.PullRequest{}, c.status, fmt.Sprintf("atlantis/%s: ./default", c.cmd.String()), c.expDescrip, "url")
 		})
 	}
 }

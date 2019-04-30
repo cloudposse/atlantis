@@ -1,9 +1,9 @@
 # The runatlantis/atlantis-base is created by docker-base/Dockerfile.
-FROM runatlantis/atlantis-base:latest
+FROM runatlantis/atlantis-base:v3.0
 LABEL authors="Anubhav Mishra, Luke Kysow"
 
 # install terraform binaries
-ENV DEFAULT_TERRAFORM_VERSION=0.11.8
+ENV DEFAULT_TERRAFORM_VERSION=0.11.13
 
 # In the official Atlantis image we only have the latest of each Terrafrom version.
 RUN AVAILABLE_TERRAFORM_VERSIONS="0.8.8 0.9.11 0.10.8 ${DEFAULT_TERRAFORM_VERSION}" && \
@@ -20,7 +20,7 @@ RUN AVAILABLE_TERRAFORM_VERSIONS="0.8.8 0.9.11 0.10.8 ${DEFAULT_TERRAFORM_VERSIO
     ln -s /usr/local/bin/tf/versions/${DEFAULT_TERRAFORM_VERSION}/terraform /usr/local/bin/terraform
 
 # copy binary
-COPY dist/bin/atlantis /usr/local/bin/atlantis
+COPY atlantis /usr/local/bin/atlantis
 
 # copy docker entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

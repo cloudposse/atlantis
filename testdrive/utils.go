@@ -126,7 +126,7 @@ func getTunnelAddr() (string, error) {
 	}
 
 	// Find the tunnel we just created.
-	expAtlantisURL := fmt.Sprintf("localhost:%d", atlantisPort)
+	expAtlantisURL := fmt.Sprintf("http://localhost:%d", atlantisPort)
 	for _, tun := range t.Tunnels {
 		if tun.Proto == "https" && tun.Config.Addr == expAtlantisURL {
 			return tun.PublicURL, nil
@@ -136,7 +136,6 @@ func getTunnelAddr() (string, error) {
 	return "", fmt.Errorf("did not find ngrok tunnel with proto 'https' and config.addr '%s' in list of tunnels at %s\n%s", expAtlantisURL, tunAPI, string(body))
 }
 
-// nolint: unparam
 func downloadAndUnzip(url string, path string, target string) error {
 	if err := downloadFile(url, path); err != nil {
 		return err
@@ -208,8 +207,8 @@ func execAndWaitForStderr(wg *sync.WaitGroup, stderrMatch *regexp.Regexp, timeou
 		// If it's a timeout we cancel the command ourselves.
 		cancel()
 		// We still need to wait for the command to finish.
-		command.Wait() // nolint: errcheck
-		return cancel, errChan, fmt.Errorf("timeout, logs:\n%s\n", log)
+		command.Wait()                                                  // nolint: errcheck
+		return cancel, errChan, fmt.Errorf("timeout, logs:\n%s\n", log) // nolint: staticcheck, golint
 	}
 
 	// Increment the wait group so callers can wait for the command to finish.

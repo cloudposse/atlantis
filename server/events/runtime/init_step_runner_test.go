@@ -3,15 +3,15 @@ package runtime_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/runtime"
-	"github.com/cloudposse/atlantis/server/events/terraform/mocks"
-	matchers2 "github.com/cloudposse/atlantis/server/events/terraform/mocks/matchers"
-	. "github.com/cloudposse/atlantis/testing"
 	version "github.com/hashicorp/go-version"
 	. "github.com/petergtz/pegomock"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/runtime"
+	"github.com/runatlantis/atlantis/server/events/terraform/mocks"
+	matchers2 "github.com/runatlantis/atlantis/server/events/terraform/mocks/matchers"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRun_UsesGetOrInitForRightVersion(t *testing.T) {
@@ -59,9 +59,9 @@ func TestRun_UsesGetOrInitForRightVersion(t *testing.T) {
 			Equals(t, "", output)
 
 			// If using init then we specify -input=false but not for get.
-			expArgs := []string{c.expCmd, "-input=false", "-no-color", "extra", "args"}
+			expArgs := []string{c.expCmd, "-input=false", "-no-color", "-upgrade", "extra", "args"}
 			if c.expCmd == "get" {
-				expArgs = []string{c.expCmd, "-no-color", "extra", "args"}
+				expArgs = []string{c.expCmd, "-no-color", "-upgrade", "extra", "args"}
 			}
 			terraform.VerifyWasCalledOnce().RunCommandWithVersion(nil, "/path", expArgs, tfVersion, "workspace")
 		})

@@ -5,19 +5,22 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/runtime"
-	"github.com/cloudposse/atlantis/server/events/terraform/mocks"
-	matchers2 "github.com/cloudposse/atlantis/server/events/terraform/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
-	"github.com/hashicorp/go-version"
+	version "github.com/hashicorp/go-version"
+	mocks2 "github.com/runatlantis/atlantis/server/events/mocks"
+	"github.com/runatlantis/atlantis/server/events/terraform"
+
 	. "github.com/petergtz/pegomock"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/runtime"
+	"github.com/runatlantis/atlantis/server/events/terraform/mocks"
+	matchers2 "github.com/runatlantis/atlantis/server/events/terraform/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRun_NoWorkspaceIn08(t *testing.T) {
@@ -472,16 +475,13 @@ func TestRun_UsesDiffPathForProject(t *testing.T) {
 	}
 	When(terraform.RunCommandWithVersion(logger, "/path", expPlanArgs, tfVersion, "default")).ThenReturn("output", nil)
 
-	projectName := "projectname"
 	output, err := s.Run(models.ProjectCommandContext{
 		Log:         logger,
 		Workspace:   "default",
 		RepoRelDir:  ".",
 		User:        models.User{Username: "username"},
 		CommentArgs: []string{"comment", "args"},
-		ProjectConfig: &valid.Project{
-			Name: &projectName,
-		},
+		ProjectName: "projectname",
 		Pull: models.PullRequest{
 			Num: 2,
 		},
@@ -494,3 +494,347 @@ func TestRun_UsesDiffPathForProject(t *testing.T) {
 	Ok(t, err)
 	Equals(t, "output", output)
 }
+
+// Test that we format the plan output for better rendering.
+func TestRun_PlanFmt(t *testing.T) {
+	rawOutput := `Refreshing Terraform state in-memory prior to plan...
+The refreshed state will be used to calculate this plan, but will not be
+persisted to local or remote state storage.
+
+
+------------------------------------------------------------------------
+
+An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+  - destroy
+
+Terraform will perform the following actions:
+
++ null_resource.test[0]
+      id: <computed>
+
+  + null_resource.test[1]
+      id: <computed>
+
+  ~ aws_security_group_rule.allow_all
+      description: "" => "test3"
+
+  - aws_security_group_rule.allow_all
+`
+	RegisterMockTestingT(t)
+	terraform := mocks.NewMockClient()
+	tfVersion, _ := version.NewVersion("0.10.0")
+	s := runtime.PlanStepRunner{
+		TerraformExecutor: terraform,
+		DefaultTFVersion:  tfVersion,
+	}
+	When(terraform.RunCommandWithVersion(
+		matchers.AnyPtrToLoggingSimpleLogger(),
+		AnyString(),
+		AnyStringSlice(),
+		matchers2.AnyPtrToGoVersionVersion(),
+		AnyString())).
+		Then(func(params []Param) ReturnValues {
+			// This code allows us to return different values depending on the
+			// tf command being run while still using the wildcard matchers above.
+			tfArgs := params[2].([]string)
+			if stringSliceEquals(tfArgs, []string{"workspace", "show"}) {
+				return []ReturnValue{"default", nil}
+			} else if tfArgs[0] == "plan" {
+				return []ReturnValue{rawOutput, nil}
+			} else {
+				return []ReturnValue{"", errors.New("unexpected call to RunCommandWithVersion")}
+			}
+		})
+	actOutput, err := s.Run(models.ProjectCommandContext{Workspace: "default"}, nil, "")
+	Ok(t, err)
+	Equals(t, `
+An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
++ create
+~ update in-place
+- destroy
+
+Terraform will perform the following actions:
+
++ null_resource.test[0]
+      id: <computed>
+
++ null_resource.test[1]
+      id: <computed>
+
+~ aws_security_group_rule.allow_all
+      description: "" => "test3"
+
+- aws_security_group_rule.allow_all
+`, actOutput)
+}
+
+// Test that even if there's an error, we get the returned output.
+func TestRun_OutputOnErr(t *testing.T) {
+	RegisterMockTestingT(t)
+	terraform := mocks.NewMockClient()
+	tfVersion, _ := version.NewVersion("0.10.0")
+	s := runtime.PlanStepRunner{
+		TerraformExecutor: terraform,
+		DefaultTFVersion:  tfVersion,
+	}
+	expOutput := "expected output"
+	expErrMsg := "error!"
+	When(terraform.RunCommandWithVersion(
+		matchers.AnyPtrToLoggingSimpleLogger(),
+		AnyString(),
+		AnyStringSlice(),
+		matchers2.AnyPtrToGoVersionVersion(),
+		AnyString())).
+		Then(func(params []Param) ReturnValues {
+			// This code allows us to return different values depending on the
+			// tf command being run while still using the wildcard matchers above.
+			tfArgs := params[2].([]string)
+			if stringSliceEquals(tfArgs, []string{"workspace", "show"}) {
+				return []ReturnValue{"default\n", nil}
+			} else if tfArgs[0] == "plan" {
+				return []ReturnValue{expOutput, errors.New(expErrMsg)}
+			} else {
+				return []ReturnValue{"", errors.New("unexpected call to RunCommandWithVersion")}
+			}
+		})
+	actOutput, actErr := s.Run(models.ProjectCommandContext{Workspace: "default"}, nil, "")
+	ErrEquals(t, expErrMsg, actErr)
+	Equals(t, expOutput, actOutput)
+}
+
+// Test that if we're using 0.12, we don't set the optional -var atlantis_repo_name
+// flags because in >= 0.12 you can't set -var flags if those variables aren't
+// being used.
+func TestRun_NoOptionalVarsIn012(t *testing.T) {
+	RegisterMockTestingT(t)
+	terraform := mocks.NewMockClient()
+
+	tfVersion, _ := version.NewVersion("0.12.0")
+	s := runtime.PlanStepRunner{
+		TerraformExecutor: terraform,
+		DefaultTFVersion:  tfVersion,
+	}
+
+	When(terraform.RunCommandWithVersion(
+		matchers.AnyPtrToLoggingSimpleLogger(),
+		AnyString(),
+		AnyStringSlice(),
+		matchers2.AnyPtrToGoVersionVersion(),
+		AnyString())).ThenReturn("output", nil)
+
+	output, err := s.Run(models.ProjectCommandContext{
+		Workspace:   "default",
+		RepoRelDir:  ".",
+		User:        models.User{Username: "username"},
+		CommentArgs: []string{"comment", "args"},
+		Pull: models.PullRequest{
+			Num: 2,
+		},
+		BaseRepo: models.Repo{
+			FullName: "owner/repo",
+			Owner:    "owner",
+			Name:     "repo",
+		},
+	}, []string{"extra", "args"}, "/path")
+	Ok(t, err)
+	Equals(t, "output", output)
+
+	expPlanArgs := []string{"plan",
+		"-input=false",
+		"-refresh",
+		"-no-color",
+		"-out",
+		fmt.Sprintf("%q", "/path/default.tfplan"),
+		"extra",
+		"args",
+		"comment",
+		"args",
+	}
+	terraform.VerifyWasCalledOnce().RunCommandWithVersion(nil, "/path", expPlanArgs, tfVersion, "default")
+}
+
+// Test plans if using remote ops.
+func TestRun_RemoteOps(t *testing.T) {
+	RegisterMockTestingT(t)
+	terraform := mocks.NewMockClient()
+	asyncTf := &remotePlanMock{}
+
+	tfVersion, _ := version.NewVersion("0.11.12")
+	updater := mocks2.NewMockCommitStatusUpdater()
+	s := runtime.PlanStepRunner{
+		TerraformExecutor:   terraform,
+		DefaultTFVersion:    tfVersion,
+		AsyncTFExec:         asyncTf,
+		CommitStatusUpdater: updater,
+	}
+	absProjectPath, cleanup := TempDir(t)
+	defer cleanup()
+
+	// First, terraform workspace gets run.
+	When(terraform.RunCommandWithVersion(
+		nil,
+		absProjectPath,
+		[]string{"workspace", "show"},
+		tfVersion,
+		"default")).ThenReturn("default\n", nil)
+
+	// Then the first call to terraform plan should return the remote ops error.
+	expPlanArgs := []string{"plan",
+		"-input=false",
+		"-refresh",
+		"-no-color",
+		"-out",
+		fmt.Sprintf("%q", filepath.Join(absProjectPath, "default.tfplan")),
+		"-var",
+		"atlantis_user=\"username\"",
+		"-var",
+		"atlantis_repo=\"owner/repo\"",
+		"-var",
+		"atlantis_repo_name=\"repo\"",
+		"-var",
+		"atlantis_repo_owner=\"owner\"",
+		"-var",
+		"atlantis_pull_num=2",
+		"extra",
+		"args",
+		"comment",
+		"args",
+	}
+
+	planErr := errors.New("exit status 1: err")
+	planOutput := `
+Error: Saving a generated plan is currently not supported!
+
+The "remote" backend does not support saving the generated execution
+plan locally at this time.
+
+`
+	asyncTf.LinesToSend = remotePlanOutput
+	When(terraform.RunCommandWithVersion(nil, absProjectPath, expPlanArgs, tfVersion, "default")).
+		ThenReturn(planOutput, planErr)
+
+	// Now that mocking is set up, we're ready to run the plan.
+	ctx := models.ProjectCommandContext{
+		Workspace:   "default",
+		RepoRelDir:  ".",
+		User:        models.User{Username: "username"},
+		CommentArgs: []string{"comment", "args"},
+		Pull: models.PullRequest{
+			Num: 2,
+		},
+		BaseRepo: models.Repo{
+			FullName: "owner/repo",
+			Owner:    "owner",
+			Name:     "repo",
+		},
+	}
+	output, err := s.Run(ctx, []string{"extra", "args"}, absProjectPath)
+	Ok(t, err)
+	Equals(t, `
+An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+- destroy
+
+Terraform will perform the following actions:
+
+- null_resource.hi[1]
+
+
+Plan: 0 to add, 0 to change, 1 to destroy.`, output)
+
+	expRemotePlanArgs := []string{"plan", "-input=false", "-refresh", "-no-color", "extra", "args", "comment", "args"}
+	Equals(t, expRemotePlanArgs, asyncTf.CalledArgs)
+
+	// Verify that the fake plan file we write has the correct contents.
+	bytes, err := ioutil.ReadFile(filepath.Join(absProjectPath, "default.tfplan"))
+	Ok(t, err)
+	Equals(t, `Atlantis: this plan was created by remote ops
+
+An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  - null_resource.hi[1]
+
+
+Plan: 0 to add, 0 to change, 1 to destroy.`, string(bytes))
+
+	// Ensure that the status was updated with the runURL.
+	runURL := "https://app.terraform.io/app/lkysow-enterprises/atlantis-tfe-test/runs/run-is4oVvJfrkud1KvE"
+	updater.VerifyWasCalledOnce().UpdateProject(ctx, models.PlanCommand, models.PendingCommitStatus, runURL)
+	updater.VerifyWasCalledOnce().UpdateProject(ctx, models.PlanCommand, models.SuccessCommitStatus, runURL)
+}
+
+type remotePlanMock struct {
+	// LinesToSend will be sent on the channel.
+	LinesToSend string
+	// CalledArgs is what args we were called with.
+	CalledArgs []string
+}
+
+func (r *remotePlanMock) RunCommandAsync(log *logging.SimpleLogger, path string, args []string, v *version.Version, workspace string) (chan<- string, <-chan terraform.Line) {
+	r.CalledArgs = args
+	in := make(chan string)
+	out := make(chan terraform.Line)
+	go func() {
+		for _, line := range strings.Split(r.LinesToSend, "\n") {
+			out <- terraform.Line{Line: line}
+		}
+		close(out)
+		close(in)
+	}()
+	return in, out
+}
+
+func stringSliceEquals(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+var remotePlanOutput = `Running plan in the remote backend. Output will stream here. Pressing Ctrl-C
+will stop streaming the logs, but will not stop the plan running remotely.
+
+Preparing the remote plan...
+
+To view this run in a browser, visit:
+https://app.terraform.io/app/lkysow-enterprises/atlantis-tfe-test/runs/run-is4oVvJfrkud1KvE
+
+Waiting for the plan to start...
+
+Terraform v0.11.11
+
+Configuring remote state backend...
+Initializing Terraform configuration...
+2019/02/20 22:40:52 [DEBUG] Using modified User-Agent: Terraform/0.11.11 TFE/202eeff
+Refreshing Terraform state in-memory prior to plan...
+The refreshed state will be used to calculate this plan, but will not be
+persisted to local or remote state storage.
+
+null_resource.hi: Refreshing state... (ID: 217661332516885645)
+null_resource.hi[1]: Refreshing state... (ID: 6064510335076839362)
+
+------------------------------------------------------------------------
+
+An execution plan has been generated and is shown below.
+Resource actions are indicated with the following symbols:
+  - destroy
+
+Terraform will perform the following actions:
+
+  - null_resource.hi[1]
+
+
+Plan: 0 to add, 0 to change, 1 to destroy.`

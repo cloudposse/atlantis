@@ -2,31 +2,30 @@ package raw
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/go-ozzo/ozzo-validation"
-	"github.com/hashicorp/go-version"
+	validation "github.com/go-ozzo/ozzo-validation"
+	version "github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 const (
-	DefaultWorkspace           = "default"
-	ApprovedApplyRequirement   = "approved"
-	ApprovedDestroyRequirement = "approved"
-	MergeableApplyRequirement  = "mergeable"
+	DefaultWorkspace          = "default"
+	ApprovedApplyRequirement  = "approved"
+	MergeableApplyRequirement = "mergeable"
 )
 
 type Project struct {
-	Name                *string   `yaml:"name,omitempty"`
-	Dir                 *string   `yaml:"dir,omitempty"`
-	Workspace           *string   `yaml:"workspace,omitempty"`
-	Workflow            *string   `yaml:"workflow,omitempty"`
-	TerraformVersion    *string   `yaml:"terraform_version,omitempty"`
-	Autoplan            *Autoplan `yaml:"autoplan,omitempty"`
-	ApplyRequirements   []string  `yaml:"apply_requirements,omitempty"`
-	DestroyRequirements []string  `yaml:"destroy_requirements,omitempty"`
+	Name              *string   `yaml:"name,omitempty"`
+	Dir               *string   `yaml:"dir,omitempty"`
+	Workspace         *string   `yaml:"workspace,omitempty"`
+	Workflow          *string   `yaml:"workflow,omitempty"`
+	TerraformVersion  *string   `yaml:"terraform_version,omitempty"`
+	Autoplan          *Autoplan `yaml:"autoplan,omitempty"`
+	ApplyRequirements []string  `yaml:"apply_requirements,omitempty"`
 }
 
 func (p Project) Validate() error {
@@ -36,24 +35,7 @@ func (p Project) Validate() error {
 		}
 		return nil
 	}
-	validApplyReq := func(value interface{}) error {
-		reqs := value.([]string)
-		for _, r := range reqs {
-			if r != ApprovedApplyRequirement && r != MergeableApplyRequirement {
-				return fmt.Errorf("%q not supported, only %s and %s are supported", r, ApprovedApplyRequirement, MergeableApplyRequirement)
-			}
-		}
-		return nil
-	}
-	validDestroyReq := func(value interface{}) error {
-		reqs := value.([]string)
-		for _, r := range reqs {
-			if r != ApprovedDestroyRequirement {
-				return fmt.Errorf("%q not supported, only %s is supported", r, ApprovedDestroyRequirement)
-			}
-		}
-		return nil
-	}
+
 	validTFVersion := func(value interface{}) error {
 		strPtr := value.(*string)
 		if strPtr == nil {
@@ -70,12 +52,14 @@ func (p Project) Validate() error {
 		if *strPtr == "" {
 			return errors.New("if set cannot be empty")
 		}
+		if !validProjectName(*strPtr) {
+			return fmt.Errorf("%q is not allowed: must contain only URL safe characters", *strPtr)
+		}
 		return nil
 	}
 	return validation.ValidateStruct(&p,
 		validation.Field(&p.Dir, validation.Required, validation.By(hasDotDot)),
 		validation.Field(&p.ApplyRequirements, validation.By(validApplyReq)),
-		validation.Field(&p.DestroyRequirements, validation.By(validDestroyReq)),
 		validation.Field(&p.TerraformVersion, validation.By(validTFVersion)),
 		validation.Field(&p.Name, validation.By(validName)),
 	)
@@ -95,7 +79,7 @@ func (p Project) ToValid() valid.Project {
 		v.Workspace = *p.Workspace
 	}
 
-	v.Workflow = p.Workflow
+	v.WorkflowName = p.Workflow
 	if p.TerraformVersion != nil {
 		v.TerraformVersion, _ = version.NewVersion(*p.TerraformVersion)
 	}
@@ -108,10 +92,26 @@ func (p Project) ToValid() valid.Project {
 	// There are no default apply requirements.
 	v.ApplyRequirements = p.ApplyRequirements
 
-	// There are no default destroy requirements.
-	v.DestroyRequirements = p.DestroyRequirements
-
 	v.Name = p.Name
 
 	return v
+}
+
+// validProjectName returns true if the project name is valid.
+// Since the name might be used in URLs and definitely in files we don't
+// support any characters that must be url escaped *except* for '/' because
+// users like to name their projects to match the directory it's in.
+func validProjectName(name string) bool {
+	nameWithoutSlashes := strings.Replace(name, "/", "-", -1)
+	return nameWithoutSlashes == url.QueryEscape(nameWithoutSlashes)
+}
+
+func validApplyReq(value interface{}) error {
+	reqs := value.([]string)
+	for _, r := range reqs {
+		if r != ApprovedApplyRequirement && r != MergeableApplyRequirement {
+			return fmt.Errorf("%q is not a valid apply_requirement, only %q and %q are supported", r, ApprovedApplyRequirement, MergeableApplyRequirement)
+		}
+	}
+	return nil
 }

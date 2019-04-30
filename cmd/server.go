@@ -20,10 +20,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/mitchellh/go-homedir"
+	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -37,14 +39,16 @@ const (
 	AllowForkPRsFlag           = "allow-fork-prs"
 	AllowRepoConfigFlag        = "allow-repo-config"
 	AtlantisURLFlag            = "atlantis-url"
+	AutomergeFlag              = "automerge"
 	BitbucketBaseURLFlag       = "bitbucket-base-url"
 	BitbucketTokenFlag         = "bitbucket-token"
 	BitbucketUserFlag          = "bitbucket-user"
 	BitbucketWebhookSecretFlag = "bitbucket-webhook-secret"
 	ConfigFlag                 = "config"
+	CheckoutStrategyFlag       = "checkout-strategy"
 	DataDirFlag                = "data-dir"
+	DefaultTFVersionFlag       = "default-tf-version"
 	GHHostnameFlag             = "gh-hostname"
-	GHTeamWhitelistFlag        = "gh-team-whitelist"
 	GHTokenFlag                = "gh-token"
 	GHUserFlag                 = "gh-user"
 	GHWebhookSecretFlag        = "gh-webhook-secret" // nolint: gosec
@@ -55,194 +59,184 @@ const (
 	LogLevelFlag               = "log-level"
 	PortFlag                   = "port"
 	RepoConfigFlag             = "repo-config"
+	RepoConfigJSONFlag         = "repo-config-json"
 	RepoWhitelistFlag          = "repo-whitelist"
 	RequireApprovalFlag        = "require-approval"
 	RequireMergeableFlag       = "require-mergeable"
+	SilenceWhitelistErrorsFlag = "silence-whitelist-errors"
+	SlackTokenFlag             = "slack-token"
 	SSLCertFileFlag            = "ssl-cert-file"
 	SSLKeyFileFlag             = "ssl-key-file"
-	WakeWordFlag               = "wake-word"
+	TFETokenFlag               = "tfe-token"
 
 	// Flag defaults.
+	DefaultCheckoutStrategy = "branch"
 	DefaultBitbucketBaseURL = bitbucketcloud.BaseURL
 	DefaultDataDir          = "~/.atlantis"
 	DefaultGHHostname       = "github.com"
-	DefaultGHTeamWhitelist  = "*:*"
 	DefaultGitlabHostname   = "gitlab.com"
 	DefaultLogLevel         = "info"
 	DefaultPort             = 4141
-	DefaultRepoConfig       = "atlantis.yaml"
-	DefaultWakeWord         = "atlantis"
 )
 
-const redTermStart = "\033[31m"
-const redTermEnd = "\033[39m"
-
-var stringFlags = []stringFlag{
-	{
-		name:        AtlantisURLFlag,
-		description: "URL that Atlantis can be reached at. Defaults to http://$(hostname):$port where $port is from --" + PortFlag + ".",
+var stringFlags = map[string]stringFlag{
+	AtlantisURLFlag: {
+		description: "URL that Atlantis can be reached at. Defaults to http://$(hostname):$port where $port is from --" + PortFlag + ". Supports a base path ex. https://example.com/basepath.",
 	},
-	{
-		name:        BitbucketUserFlag,
+	BitbucketUserFlag: {
 		description: "Bitbucket username of API user.",
 	},
-	{
-		name:        BitbucketTokenFlag,
+	BitbucketTokenFlag: {
 		description: "Bitbucket app password of API user. Can also be specified via the ATLANTIS_BITBUCKET_TOKEN environment variable.",
 	},
-	{
-		name: BitbucketBaseURLFlag,
+	BitbucketBaseURLFlag: {
 		description: "Base URL of Bitbucket Server (aka Stash) installation." +
-			" Must include scheme, ex. 'http://bitbucket.corp:7990' or 'https://bitbucket.corp'." +
+			" Must include 'http://' or 'https://'." +
 			" If using Bitbucket Cloud (bitbucket.org), do not set.",
 		defaultValue: DefaultBitbucketBaseURL,
 	},
-	{
-		name: BitbucketWebhookSecretFlag,
+	BitbucketWebhookSecretFlag: {
 		description: "Secret used to validate Bitbucket webhooks. Only Bitbucket Server supports webhook secrets." +
 			" SECURITY WARNING: If not specified, Atlantis won't be able to validate that the incoming webhook call came from Bitbucket. " +
 			"This means that an attacker could spoof calls to Atlantis and cause it to perform malicious actions. " +
 			"Should be specified via the ATLANTIS_BITBUCKET_WEBHOOK_SECRET environment variable.",
 	},
-	{
-		name:        ConfigFlag,
-		description: "Path to config file. All flags can be set in a YAML config file instead.",
+	CheckoutStrategyFlag: {
+		description: "How to check out pull requests. Accepts either 'branch' (default) or 'merge'." +
+			" If set to branch, Atlantis will check out the source branch of the pull request." +
+			" If set to merge, Atlantis will check out the destination branch of the pull request (ex. master)" +
+			" and then locally perform a git merge of the source branch." +
+			" This effectively means Atlantis operates on the repo as it will look" +
+			" after the pull request is merged.",
+		defaultValue: "branch",
 	},
-	{
-		name:         DataDirFlag,
+	ConfigFlag: {
+		description: "Path to yaml config file where flag values can also be set.",
+	},
+	DataDirFlag: {
 		description:  "Path to directory to store Atlantis data.",
 		defaultValue: DefaultDataDir,
 	},
-	{
-		name:         GHHostnameFlag,
+	GHHostnameFlag: {
 		description:  "Hostname of your Github Enterprise installation. If using github.com, no need to set.",
 		defaultValue: DefaultGHHostname,
 	},
-	{
-		name: GHTeamWhitelistFlag,
-		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that the members of a particular team are allowed to perform. " +
-			"The format is {team}:{command},{team}:{command}, ex. dev:plan,ops:apply,admin:destroy,devops:*. " +
-			"This example means to give the users from the 'dev' GitHub team the permissions to execute the 'plan' command, " +
-			"give the 'ops' team the permissions to execute the 'apply' command, " +
-			"give the 'admin' team the permissions to execute the 'destroy' command, " +
-			"and allow the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) will be used and the default behavior will be to not check permissions " +
-			"and to allow users from any team to perform any operation.",
-		defaultValue: DefaultGHTeamWhitelist,
-	},
-	{
-		name:        GHUserFlag,
+	GHUserFlag: {
 		description: "GitHub username of API user.",
 	},
-	{
-		name:        GHTokenFlag,
+	GHTokenFlag: {
 		description: "GitHub token of API user. Can also be specified via the ATLANTIS_GH_TOKEN environment variable.",
 	},
-	{
-		name: GHWebhookSecretFlag,
+	GHWebhookSecretFlag: {
 		description: "Secret used to validate GitHub webhooks (see https://developer.github.com/webhooks/securing/)." +
 			" SECURITY WARNING: If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitHub. " +
 			"This means that an attacker could spoof calls to Atlantis and cause it to perform malicious actions. " +
 			"Should be specified via the ATLANTIS_GH_WEBHOOK_SECRET environment variable.",
 	},
-	{
-		name:         GitlabHostnameFlag,
+	GitlabHostnameFlag: {
 		description:  "Hostname of your GitLab Enterprise installation. If using gitlab.com, no need to set.",
 		defaultValue: DefaultGitlabHostname,
 	},
-	{
-		name:        GitlabUserFlag,
+	GitlabUserFlag: {
 		description: "GitLab username of API user.",
 	},
-	{
-		name:        GitlabTokenFlag,
+	GitlabTokenFlag: {
 		description: "GitLab token of API user. Can also be specified via the ATLANTIS_GITLAB_TOKEN environment variable.",
 	},
-	{
-		name: GitlabWebhookSecretFlag,
+	GitlabWebhookSecretFlag: {
 		description: "Optional secret used to validate GitLab webhooks." +
 			" SECURITY WARNING: If not specified, Atlantis won't be able to validate that the incoming webhook call came from GitLab. " +
 			"This means that an attacker could spoof calls to Atlantis and cause it to perform malicious actions. " +
 			"Should be specified via the ATLANTIS_GITLAB_WEBHOOK_SECRET environment variable.",
 	},
-	{
-		name:         LogLevelFlag,
+	LogLevelFlag: {
 		description:  "Log level. Either debug, info, warn, or error.",
 		defaultValue: DefaultLogLevel,
 	},
-	{
-		name: RepoConfigFlag,
-		description: "Optional path to the Atlantis YAML config file contained in each repo that this server should use. " +
-			"This allows different Atlantis servers to point at different configs in the same repo.",
-		defaultValue: DefaultRepoConfig,
+	RepoConfigFlag: {
+		description: "Path to a repo config file, used to customize how Atlantis runs on each repo. See runatlantis.io/docs for more details.",
 	},
-	{
-		name: RepoWhitelistFlag,
+	RepoConfigJSONFlag: {
+		description: "Specify repo config as a JSON string. Useful if you don't want to write a config file to disk.",
+	},
+	RepoWhitelistFlag: {
 		description: "Comma separated list of repositories that Atlantis will operate on. " +
-			"The format is {hostname}/{owner}/{repo}, ex. github.com/runatlantis/atlantis. '*' matches any characters until the next comma and can be used for example to whitelist " +
-			"all repos: '*' (not recommended), an entire hostname: 'internalgithub.com/*' or an organization: 'github.com/runatlantis/*'." +
-			" For Bitbucket Server, {hostname} is the domain without scheme and port, {owner} is the name of the project (not the key), and {repo} is the repo name.",
+			"The format is {hostname}/{owner}/{repo}, ex. github.com/runatlantis/atlantis. '*' matches any characters until the next comma. Examples: " +
+			"all repos: '*' (not secure), an entire hostname: 'internalgithub.com/*' or an organization: 'github.com/runatlantis/*'." +
+			" For Bitbucket Server, {owner} is the name of the project (not the key).",
 	},
-	{
-		name:        SSLCertFileFlag,
+	SlackTokenFlag: {
+		description: "API token for Slack notifications.",
+	},
+	SSLCertFileFlag: {
 		description: "File containing x509 Certificate used for serving HTTPS. If the cert is signed by a CA, the file should be the concatenation of the server's certificate, any intermediates, and the CA's certificate.",
 	},
-	{
-		name:        SSLKeyFileFlag,
+	SSLKeyFileFlag: {
 		description: fmt.Sprintf("File containing x509 private key matching --%s.", SSLCertFileFlag),
 	},
-	{
-		name: WakeWordFlag,
-		description: "Wake word for this server to listen to. Default is 'atlantis'. " +
-			"This allows different wake commands (e.g. 'staging' or 'prod') to be used for different stages if more than one server operates on the same repo.",
-		defaultValue: DefaultWakeWord,
+	TFETokenFlag: {
+		description: "API token for Terraform Enterprise. This will be used to generate a ~/.terraformrc file." +
+			" Only set if using TFE as a backend." +
+			" Should be specified via the ATLANTIS_TFE_TOKEN environment variable for security.",
+	},
+	DefaultTFVersionFlag: {
+		description: "Terraform version to default to (ex. v0.12.0). Will download if not yet on disk." +
+			" If not set, Atlantis uses the terraform binary in its PATH.",
 	},
 }
-var boolFlags = []boolFlag{
-	{
-		name:         AllowForkPRsFlag,
+
+var boolFlags = map[string]boolFlag{
+	AllowForkPRsFlag: {
 		description:  "Allow Atlantis to run on pull requests from forks. A security issue for public repos.",
 		defaultValue: false,
 	},
-	{
-		name: AllowRepoConfigFlag,
-		description: "Allow repositories to use atlantis repo config YAML files to customize the commands Atlantis runs." +
+	AllowRepoConfigFlag: {
+		description: "Allow repositories to use atlantis.yaml files to customize the commands Atlantis runs." +
 			" Should only be enabled in a trusted environment since it enables a pull request to run arbitrary commands" +
 			" on the Atlantis server.",
 		defaultValue: false,
+		hidden:       true,
 	},
-	{
-		name:         RequireApprovalFlag,
-		description:  "Require pull requests to be \"Approved\" before allowing the apply command to be run.",
+	AutomergeFlag: {
+		description:  "Automatically merge pull requests when all plans are successfully applied.",
 		defaultValue: false,
 	},
-	{
-		name:         RequireMergeableFlag,
+	RequireApprovalFlag: {
+		description:  "Require pull requests to be \"Approved\" before allowing the apply command to be run.",
+		defaultValue: false,
+		hidden:       true,
+	},
+	RequireMergeableFlag: {
 		description:  "Require pull requests to be mergeable before allowing the apply command to be run.",
+		defaultValue: false,
+		hidden:       true,
+	},
+	SilenceWhitelistErrorsFlag: {
+		description:  "Silences the posting of whitelist error comments.",
 		defaultValue: false,
 	},
 }
-var intFlags = []intFlag{
-	{
-		name:         PortFlag,
+var intFlags = map[string]intFlag{
+	PortFlag: {
 		description:  "Port to bind to.",
 		defaultValue: DefaultPort,
 	},
 }
 
 type stringFlag struct {
-	name         string
 	description  string
 	defaultValue string
+	hidden       bool
 }
 type intFlag struct {
-	name         string
 	description  string
 	defaultValue int
+	hidden       bool
 }
 type boolFlag struct {
-	name         string
 	description  string
 	defaultValue bool
+	hidden       bool
 }
 
 // ServerCmd is an abstraction that helps us test. It allows
@@ -254,6 +248,7 @@ type ServerCmd struct {
 	// Useful for testing to keep the logs clean.
 	SilenceOutput   bool
 	AtlantisVersion string
+	Logger          *logging.SimpleLogger
 }
 
 // ServerCreator creates servers.
@@ -283,7 +278,7 @@ func (s *ServerCmd) Init() *cobra.Command {
 		Short:         "Start the atlantis server",
 		Long:          `Start the atlantis server and listen for webhook calls.`,
 		SilenceErrors: true,
-		SilenceUsage:  s.SilenceOutput,
+		SilenceUsage:  true,
 		PreRunE: s.withErrPrint(func(cmd *cobra.Command, args []string) error {
 			return s.preRun()
 		}),
@@ -299,41 +294,46 @@ func (s *ServerCmd) Init() *cobra.Command {
 	s.Viper.AutomaticEnv()
 	s.Viper.SetTypeByDefaultValue(true)
 
-	// Replace the call in their template to use the usage function that wraps
-	// columns to make for a nicer output.
-	usageWithWrappedCols := strings.Replace(c.UsageTemplate(), ".FlagUsages", ".FlagUsagesWrapped 120", -1)
-	c.SetUsageTemplate(usageWithWrappedCols)
-
+	c.SetUsageTemplate(usageTmpl(stringFlags, intFlags, boolFlags))
 	// If a user passes in an invalid flag, tell them what the flag was.
 	c.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
-		fmt.Fprintf(os.Stderr, "\033[31mError: %s\033[39m\n\n", err.Error())
+		s.printErr(err)
 		return err
 	})
 
 	// Set string flags.
-	for _, f := range stringFlags {
+	for name, f := range stringFlags {
 		usage := f.description
 		if f.defaultValue != "" {
-			usage = fmt.Sprintf("%s (default \"%s\")", usage, f.defaultValue)
+			usage = fmt.Sprintf("%s (default %q)", usage, f.defaultValue)
 		}
-		c.Flags().String(f.name, "", usage+"\n")
-		s.Viper.BindPFlag(f.name, c.Flags().Lookup(f.name)) // nolint: errcheck
+		c.Flags().String(name, "", usage+"\n")
+		s.Viper.BindPFlag(name, c.Flags().Lookup(name)) // nolint: errcheck
+		if f.hidden {
+			c.Flags().MarkHidden(name) // nolint: errcheck
+		}
 	}
 
 	// Set int flags.
-	for _, f := range intFlags {
+	for name, f := range intFlags {
 		usage := f.description
 		if f.defaultValue != 0 {
 			usage = fmt.Sprintf("%s (default %d)", usage, f.defaultValue)
 		}
-		c.Flags().Int(f.name, 0, usage+"\n")
-		s.Viper.BindPFlag(f.name, c.Flags().Lookup(f.name)) // nolint: errcheck
+		c.Flags().Int(name, 0, usage+"\n")
+		if f.hidden {
+			c.Flags().MarkHidden(name) // nolint: errcheck
+		}
+		s.Viper.BindPFlag(name, c.Flags().Lookup(name)) // nolint: errcheck
 	}
 
 	// Set bool flags.
-	for _, f := range boolFlags {
-		c.Flags().Bool(f.name, f.defaultValue, f.description+"\n")
-		s.Viper.BindPFlag(f.name, c.Flags().Lookup(f.name)) // nolint: errcheck
+	for name, f := range boolFlags {
+		c.Flags().Bool(name, f.defaultValue, f.description+"\n")
+		if f.hidden {
+			c.Flags().MarkHidden(name) // nolint: errcheck
+		}
+		s.Viper.BindPFlag(name, c.Flags().Lookup(name)) // nolint: errcheck
 	}
 
 	return c
@@ -357,6 +357,11 @@ func (s *ServerCmd) run() error {
 		return err
 	}
 	s.setDefaults(&userConfig)
+
+	// Now that we've parsed the config we can set our local logger to the
+	// right level.
+	s.Logger.SetLevel(userConfig.ToLogLevel())
+
 	if err := s.validate(userConfig); err != nil {
 		return err
 	}
@@ -366,14 +371,19 @@ func (s *ServerCmd) run() error {
 	if err := s.setDataDir(&userConfig); err != nil {
 		return err
 	}
+	if err := s.deprecationWarnings(&userConfig); err != nil {
+		return err
+	}
 	s.securityWarnings(&userConfig)
 	s.trimAtSymbolFromUsers(&userConfig)
 
 	// Config looks good. Start the server.
 	server, err := s.ServerCreator.NewServer(userConfig, server.Config{
-		AllowForkPRsFlag:    AllowForkPRsFlag,
-		AllowRepoConfigFlag: AllowRepoConfigFlag,
-		AtlantisVersion:     s.AtlantisVersion,
+		AllowForkPRsFlag:     AllowForkPRsFlag,
+		AtlantisURLFlag:      AtlantisURLFlag,
+		AtlantisVersion:      s.AtlantisVersion,
+		DefaultTFVersionFlag: DefaultTFVersionFlag,
+		RepoConfigJSONFlag:   RepoConfigJSONFlag,
 	})
 	if err != nil {
 		return errors.Wrap(err, "initializing server")
@@ -382,6 +392,9 @@ func (s *ServerCmd) run() error {
 }
 
 func (s *ServerCmd) setDefaults(c *server.UserConfig) {
+	if c.CheckoutStrategy == "" {
+		c.CheckoutStrategy = DefaultCheckoutStrategy
+	}
 	if c.DataDir == "" {
 		c.DataDir = DefaultDataDir
 	}
@@ -400,21 +413,16 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	if c.Port == 0 {
 		c.Port = DefaultPort
 	}
-	if c.GithubTeamWhitelist == "" {
-		c.GithubTeamWhitelist = DefaultGHTeamWhitelist
-	}
-	if c.RepoConfig == "" {
-		c.RepoConfig = DefaultRepoConfig
-	}
-	if c.WakeWord == "" {
-		c.WakeWord = DefaultWakeWord
-	}
 }
 
 func (s *ServerCmd) validate(userConfig server.UserConfig) error {
 	logLevel := userConfig.LogLevel
 	if logLevel != "debug" && logLevel != "info" && logLevel != "warn" && logLevel != "error" {
 		return errors.New("invalid log level: not one of debug, info, warn, error")
+	}
+	checkoutStrat := userConfig.CheckoutStrategy
+	if checkoutStrat != "branch" && checkoutStrat != "merge" {
+		return errors.New("invalid checkout strategy: not one of branch or merge")
 	}
 
 	if (userConfig.SSLKeyFile == "") != (userConfig.SSLCertFile == "") {
@@ -455,9 +463,22 @@ func (s *ServerCmd) validate(userConfig server.UserConfig) error {
 		return fmt.Errorf("--%s must have http:// or https://, got %q", BitbucketBaseURLFlag, userConfig.BitbucketBaseURL)
 	}
 
-	// Cannot accept custom repo config if we know repo configs are disabled
-	if (userConfig.RepoConfig != DefaultRepoConfig) && (!userConfig.AllowRepoConfig) {
-		return fmt.Errorf("custom --%s cannot be specified if --%s is false", RepoConfigFlag, AllowRepoConfigFlag)
+	if userConfig.RepoConfig != "" && userConfig.RepoConfigJSON != "" {
+		return fmt.Errorf("cannot use --%s and --%s at the same time", RepoConfigFlag, RepoConfigJSONFlag)
+	}
+
+	// Warn if any tokens have newlines.
+	for name, token := range map[string]string{
+		GHTokenFlag:                userConfig.GithubToken,
+		GHWebhookSecretFlag:        userConfig.GithubWebhookSecret,
+		GitlabTokenFlag:            userConfig.GitlabToken,
+		GitlabWebhookSecretFlag:    userConfig.GitlabWebhookSecret,
+		BitbucketTokenFlag:         userConfig.BitbucketToken,
+		BitbucketWebhookSecretFlag: userConfig.BitbucketWebhookSecret,
+	} {
+		if strings.Contains(token, "\n") {
+			s.Logger.Warn("--%s contains a newline which is usually unintentional", name)
+		}
 	}
 
 	return nil
@@ -468,7 +489,7 @@ func (s *ServerCmd) setAtlantisURL(userConfig *server.UserConfig) error {
 	if userConfig.AtlantisURL == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return fmt.Errorf("Failed to determine hostname: %v", err)
+			return errors.Wrap(err, "failed to determine hostname")
 		}
 		userConfig.AtlantisURL = fmt.Sprintf("http://%s:%d", hostname, userConfig.Port)
 	}
@@ -508,26 +529,80 @@ func (s *ServerCmd) trimAtSymbolFromUsers(userConfig *server.UserConfig) {
 
 func (s *ServerCmd) securityWarnings(userConfig *server.UserConfig) {
 	if userConfig.GithubUser != "" && userConfig.GithubWebhookSecret == "" && !s.SilenceOutput {
-		fmt.Fprintf(os.Stderr, "%s[WARN] No GitHub webhook secret set. This could allow attackers to spoof requests from GitHub.%s\n", redTermStart, redTermEnd)
+		s.Logger.Warn("no GitHub webhook secret set. This could allow attackers to spoof requests from GitHub")
 	}
 	if userConfig.GitlabUser != "" && userConfig.GitlabWebhookSecret == "" && !s.SilenceOutput {
-		fmt.Fprintf(os.Stderr, "%s[WARN] No GitLab webhook secret set. This could allow attackers to spoof requests from GitLab.%s\n", redTermStart, redTermEnd)
+		s.Logger.Warn("no GitLab webhook secret set. This could allow attackers to spoof requests from GitLab")
 	}
 	if userConfig.BitbucketUser != "" && userConfig.BitbucketBaseURL != DefaultBitbucketBaseURL && userConfig.BitbucketWebhookSecret == "" && !s.SilenceOutput {
-		fmt.Fprintf(os.Stderr, "%s[WARN] No Bitbucket webhook secret set. This could allow attackers to spoof requests from Bitbucket.%s\n", redTermStart, redTermEnd)
+		s.Logger.Warn("no Bitbucket webhook secret set. This could allow attackers to spoof requests from Bitbucket")
 	}
 	if userConfig.BitbucketUser != "" && userConfig.BitbucketBaseURL == DefaultBitbucketBaseURL && !s.SilenceOutput {
-		fmt.Fprintf(os.Stderr, "%s[WARN] Bitbucket Cloud does not support webhook secrets. This could allow attackers to spoof requests from Bitbucket. Ensure you are whitelisting Bitbucket IPs.%s\n", redTermStart, redTermEnd)
+		s.Logger.Warn("Bitbucket Cloud does not support webhook secrets. This could allow attackers to spoof requests from Bitbucket. Ensure you are whitelisting Bitbucket IPs")
 	}
 }
 
-// withErrPrint prints out any errors to a terminal in red.
+// deprecationWarnings prints a warning if flags that are deprecated are
+// being used. Right now this only applies to flags that have been made obsolete
+// due to server-side config.
+func (s *ServerCmd) deprecationWarnings(userConfig *server.UserConfig) error {
+	var applyReqs []string
+	var deprecatedFlags []string
+	if userConfig.RequireApproval {
+		deprecatedFlags = append(deprecatedFlags, RequireApprovalFlag)
+		applyReqs = append(applyReqs, valid.ApprovedApplyReq)
+	}
+	if userConfig.RequireMergeable {
+		deprecatedFlags = append(deprecatedFlags, RequireMergeableFlag)
+		applyReqs = append(applyReqs, valid.MergeableApplyReq)
+	}
+
+	// Build up strings with what the recommended yaml and json config should
+	// be instead of using the deprecated flags.
+	yamlCfg := "---\nrepos:\n- id: /.*/"
+	jsonCfg := `{"repos":[{"id":"/.*/"`
+	if len(applyReqs) > 0 {
+		yamlCfg += fmt.Sprintf("\n  apply_requirements: [%s]", strings.Join(applyReqs, ", "))
+		jsonCfg += fmt.Sprintf(`, "apply_requirements":["%s"]`, strings.Join(applyReqs, "\", \""))
+
+	}
+	if userConfig.AllowRepoConfig {
+		deprecatedFlags = append(deprecatedFlags, AllowRepoConfigFlag)
+		yamlCfg += "\n  allowed_overrides: [apply_requirements, workflow]\n  allow_custom_workflows: true"
+		jsonCfg += `, "allowed_overrides":["apply_requirements","workflow"], "allow_custom_workflows":true`
+	}
+	jsonCfg += "}]}"
+
+	if len(deprecatedFlags) > 0 {
+		warning := "WARNING: "
+		if len(deprecatedFlags) == 1 {
+			warning += fmt.Sprintf("Flag --%s has been deprecated.", deprecatedFlags[0])
+		} else {
+			warning += fmt.Sprintf("Flags --%s and --%s have been deprecated.", strings.Join(deprecatedFlags[0:len(deprecatedFlags)-1], ", --"), deprecatedFlags[len(deprecatedFlags)-1:][0])
+		}
+		warning += fmt.Sprintf("\nCreate a --%s file with the following config instead:\n\n%s\n\nor use --%s='%s'\n",
+			RepoConfigFlag,
+			yamlCfg,
+			RepoConfigJSONFlag,
+			jsonCfg,
+		)
+		fmt.Println(warning)
+	}
+	return nil
+}
+
+// withErrPrint prints out any cmd errors to stderr.
 func (s *ServerCmd) withErrPrint(f func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		err := f(cmd, args)
 		if err != nil && !s.SilenceOutput {
-			fmt.Fprintf(os.Stderr, "%s[ERROR] %s%s\n\n", redTermStart, err.Error(), redTermEnd)
+			s.printErr(err)
 		}
 		return err
 	}
+}
+
+// printErr prints err to stderr using a red terminal colour.
+func (s *ServerCmd) printErr(err error) {
+	fmt.Fprintf(os.Stderr, "%sError: %s%s\n", "\033[31m", err.Error(), "\033[39m")
 }

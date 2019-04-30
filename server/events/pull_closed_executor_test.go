@@ -17,15 +17,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	lockmocks "github.com/cloudposse/atlantis/server/events/locking/mocks"
-	"github.com/cloudposse/atlantis/server/events/mocks"
-	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/models/fixtures"
-	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/db"
+
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server/events"
+	lockmocks "github.com/runatlantis/atlantis/server/events/locking/mocks"
+	"github.com/runatlantis/atlantis/server/events/mocks"
+	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/models/fixtures"
+	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestCleanUpPullWorkspaceErr(t *testing.T) {
@@ -61,14 +63,19 @@ func TestCleanUpPullNoLocks(t *testing.T) {
 	RegisterMockTestingT(t)
 	w := mocks.NewMockWorkingDir()
 	l := lockmocks.NewMockLocker()
-	cp := vcsmocks.NewMockClientProxy()
+	cp := vcsmocks.NewMockClient()
+	tmp, cleanup := TempDir(t)
+	defer cleanup()
+	db, err := db.New(tmp)
+	Ok(t, err)
 	pce := events.PullClosedExecutor{
 		Locker:     l,
 		VCSClient:  cp,
 		WorkingDir: w,
+		DB:         db,
 	}
 	When(l.UnlockByPull(fixtures.GithubRepo.FullName, fixtures.Pull.Num)).ThenReturn(nil, nil)
-	err := pce.CleanUpPull(fixtures.GithubRepo, fixtures.Pull)
+	err = pce.CleanUpPull(fixtures.GithubRepo, fixtures.Pull)
 	Ok(t, err)
 	cp.VerifyWasCalled(Never()).CreateComment(matchers.AnyModelsRepo(), AnyInt(), AnyString())
 }
@@ -139,21 +146,28 @@ func TestCleanUpPullComments(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		w := mocks.NewMockWorkingDir()
-		cp := vcsmocks.NewMockClientProxy()
-		l := lockmocks.NewMockLocker()
-		pce := events.PullClosedExecutor{
-			Locker:     l,
-			VCSClient:  cp,
-			WorkingDir: w,
-		}
-		t.Log("testing: " + c.Description)
-		When(l.UnlockByPull(fixtures.GithubRepo.FullName, fixtures.Pull.Num)).ThenReturn(c.Locks, nil)
-		err := pce.CleanUpPull(fixtures.GithubRepo, fixtures.Pull)
-		Ok(t, err)
-		_, _, comment := cp.VerifyWasCalledOnce().CreateComment(matchers.AnyModelsRepo(), AnyInt(), AnyString()).GetCapturedArguments()
+		func() {
+			w := mocks.NewMockWorkingDir()
+			cp := vcsmocks.NewMockClient()
+			l := lockmocks.NewMockLocker()
+			tmp, cleanup := TempDir(t)
+			defer cleanup()
+			db, err := db.New(tmp)
+			Ok(t, err)
+			pce := events.PullClosedExecutor{
+				Locker:     l,
+				VCSClient:  cp,
+				WorkingDir: w,
+				DB:         db,
+			}
+			t.Log("testing: " + c.Description)
+			When(l.UnlockByPull(fixtures.GithubRepo.FullName, fixtures.Pull.Num)).ThenReturn(c.Locks, nil)
+			err = pce.CleanUpPull(fixtures.GithubRepo, fixtures.Pull)
+			Ok(t, err)
+			_, _, comment := cp.VerifyWasCalledOnce().CreateComment(matchers.AnyModelsRepo(), AnyInt(), AnyString()).GetCapturedArguments()
 
-		expected := "Locks and plans deleted for the projects and workspaces modified in this pull request:\n\n" + c.Exp
-		Equals(t, expected, comment)
+			expected := "Locks and plans deleted for the projects and workspaces modified in this pull request:\n\n" + c.Exp
+			Equals(t, expected, comment)
+		}()
 	}
 }

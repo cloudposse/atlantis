@@ -3,10 +3,10 @@ package raw_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/raw"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	. "github.com/cloudposse/atlantis/testing"
-	"gopkg.in/yaml.v2"
+	"github.com/runatlantis/atlantis/server/events/yaml/raw"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	. "github.com/runatlantis/atlantis/testing"
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestStepConfig_UnmarshalYAML(t *testing.T) {
@@ -216,7 +216,7 @@ func TestStep_Validate(t *testing.T) {
 			input: raw.Step{
 				Key: String("invalid"),
 			},
-			expErr: "\"invalid\" is not a valid step type",
+			expErr: "\"invalid\" is not a valid step type, maybe you omitted the 'run' key",
 		},
 		{
 			description: "multiple keys in map",
@@ -268,13 +268,14 @@ func TestStep_Validate(t *testing.T) {
 			expErr: "built-in steps only support a single extra_args key, found \"invalid\" in step init",
 		},
 		{
+			// For atlantis.yaml v2, this wouldn't parse, but now there should
+			// be no error.
 			description: "unparseable shell command",
 			input: raw.Step{
 				StringVal: map[string]string{
 					"run": "my 'c",
 				},
 			},
-			expErr: "unable to parse as shell command: EOF found when expecting closing quote.",
 		},
 	}
 	for _, c := range cases {
@@ -373,7 +374,7 @@ func TestStep_ToValid(t *testing.T) {
 			},
 			exp: valid.Step{
 				StepName:   "run",
-				RunCommand: []string{"my", "run command"},
+				RunCommand: "my 'run command'",
 			},
 		},
 	}

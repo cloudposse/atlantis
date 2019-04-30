@@ -1,11 +1,11 @@
 Ran Apply for 2 projects:
-1. workspace: `default` dir: `.`
-1. workspace: `staging` dir: `.`
+1. dir: `.` workspace: `default`
+1. dir: `.` workspace: `staging`
 
-### 1. workspace: `default` dir: `.`
+### 1. dir: `.` workspace: `default`
 ```diff
-null_resource.simple: Creating...
-null_resource.simple: Creation complete after *s (ID: ******************)
+null_resource.simple:
+null_resource.simple:
 
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
 
@@ -17,10 +17,14 @@ workspace = default
 ```
 
 ---
-### 2. workspace: `staging` dir: `.`
+### 2. dir: `.` workspace: `staging`
+<details><summary>Show Output</summary>
+
 ```diff
-null_resource.simple: Creating...
-null_resource.simple: Creation complete after *s (ID: ******************)
+preapply
+
+null_resource.simple:
+null_resource.simple:
 
 Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
 
@@ -29,7 +33,10 @@ Outputs:
 var = fromfile
 workspace = staging
 
+postapply
+
 ```
+</details>
 
 ---
 

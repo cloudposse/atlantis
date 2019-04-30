@@ -2,16 +2,71 @@ package bitbucketserver_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	. "github.com/runatlantis/atlantis/testing"
 )
+
+// Test that we include the base path in our base url.
+func TestClient_BasePath(t *testing.T) {
+	cases := []struct {
+		inputURL string
+		expURL   string
+		expErr   string
+	}{
+		{
+			inputURL: "mycompany.com",
+			expErr:   `must have 'http://' or 'https://' in base url "mycompany.com"`,
+		},
+		{
+			inputURL: "https://mycompany.com",
+			expURL:   "https://mycompany.com",
+		},
+		{
+			inputURL: "http://mycompany.com",
+			expURL:   "http://mycompany.com",
+		},
+		{
+			inputURL: "http://mycompany.com:7990",
+			expURL:   "http://mycompany.com:7990",
+		},
+		{
+			inputURL: "http://mycompany.com/",
+			expURL:   "http://mycompany.com",
+		},
+		{
+			inputURL: "http://mycompany.com:7990/",
+			expURL:   "http://mycompany.com:7990",
+		},
+		{
+			inputURL: "http://mycompany.com/basepath/",
+			expURL:   "http://mycompany.com/basepath",
+		},
+		{
+			inputURL: "http://mycompany.com:7990/basepath/",
+			expURL:   "http://mycompany.com:7990/basepath",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.inputURL, func(t *testing.T) {
+			client, err := bitbucketserver.NewClient(nil, "u", "p", c.inputURL, "atlantis-url")
+			if c.expErr != "" {
+				ErrEquals(t, c.expErr, err)
+			} else {
+				Ok(t, err)
+				Equals(t, c.expURL, client.BaseURL)
+			}
+		})
+	}
+}
 
 // Should follow pagination properly.
 func TestClient_GetModifiedFilesPagination(t *testing.T) {
@@ -45,7 +100,7 @@ func TestClient_GetModifiedFilesPagination(t *testing.T) {
 		// The first request should hit this URL.
 		case "/rest/api/1.0/projects/ow/repos/repo/pull-requests/1/changes?start=0":
 			resp := strings.Replace(firstResp, `"isLastPage": true`, `"isLastPage": false`, -1)
-			resp = strings.Replace(resp, `"nextPageStart": null`, `"nextPageStart": "3"`, -1)
+			resp = strings.Replace(resp, `"nextPageStart": null`, `"nextPageStart": 3`, -1)
 			w.Write([]byte(resp)) // nolint: errcheck
 			return
 			// The second should hit this URL.
@@ -79,39 +134,20 @@ func TestClient_GetModifiedFilesPagination(t *testing.T) {
 	Equals(t, []string{"file1.txt", "file2.txt", "file3.txt"}, files)
 }
 
-// If the "old" key in the list of files is nil we shouldn't error.
-func TestClient_GetModifiedFilesOldNil(t *testing.T) {
-	resp := `
-{
-  "pagelen": 500,
-  "values": [
-    {
-      "status": "added",
-      "old": null,
-      "lines_removed": 0,
-      "lines_added": 2,
-      "new": {
-        "path": "parent/child/file1.txt",
-        "type": "commit_file",
-        "links": {
-          "self": {
-            "href": "https://api.bitbucket.org/2.0/repositories/lkysow/atlantis-example/src/1ed8205eec00dab4f1c0a8c486a4492c98c51f8e/main.tf"
-          }
-        }
-      },
-      "type": "diffstat"
-    }
-  ],
-  "page": 1,
-  "size": 1
-}`
-
+// Test that we use the correct version parameter in our call to merge the pull
+// request.
+func TestClient_MergePull(t *testing.T) {
+	pullRequest, err := ioutil.ReadFile(filepath.Join("testdata", "pull-request.json"))
+	Ok(t, err)
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.RequestURI {
 		// The first request should hit this URL.
-		case "/2.0/repositories/owner/repo/pullrequests/1/diffstat":
-			w.Write([]byte(resp)) // nolint: errcheck
+		case "/rest/api/1.0/projects/ow/repos/repo/pull-requests/1":
+			w.Write(pullRequest) // nolint: errcheck
 			return
+		case "/rest/api/1.0/projects/ow/repos/repo/pull-requests/1/merge?version=3":
+			Equals(t, "POST", r.Method)
+			w.Write(pullRequest) // nolint: errcheck
 		default:
 			t.Errorf("got unexpected request at %q", r.RequestURI)
 			http.Error(w, "not found", http.StatusNotFound)
@@ -120,22 +156,27 @@ func TestClient_GetModifiedFilesOldNil(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	client := bitbucketcloud.NewClient(http.DefaultClient, "user", "pass", "runatlantis.io")
-	client.BaseURL = testServer.URL
+	client, err := bitbucketserver.NewClient(http.DefaultClient, "user", "pass", testServer.URL, "runatlantis.io")
+	Ok(t, err)
 
-	files, err := client.GetModifiedFiles(models.Repo{
-		FullName:          "owner/repo",
-		Owner:             "owner",
-		Name:              "repo",
-		CloneURL:          "",
-		SanitizedCloneURL: "",
-		VCSHost: models.VCSHost{
-			Type:     models.BitbucketCloud,
-			Hostname: "bitbucket.org",
+	err = client.MergePull(models.PullRequest{
+		Num:        1,
+		HeadCommit: "",
+		URL:        "",
+		HeadBranch: "",
+		BaseBranch: "",
+		Author:     "",
+		State:      0,
+		BaseRepo: models.Repo{
+			FullName:          "owner/repo",
+			Owner:             "owner",
+			Name:              "repo",
+			SanitizedCloneURL: fmt.Sprintf("%s/scm/ow/repo.git", testServer.URL),
+			VCSHost: models.VCSHost{
+				Type:     models.BitbucketCloud,
+				Hostname: "bitbucket.org",
+			},
 		},
-	}, models.PullRequest{
-		Num: 1,
 	})
 	Ok(t, err)
-	Equals(t, []string{"parent/child/file1.txt"}, files)
 }

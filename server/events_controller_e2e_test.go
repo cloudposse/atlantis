@@ -13,23 +13,32 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server"
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/locking"
-	"github.com/cloudposse/atlantis/server/events/locking/boltdb"
-	"github.com/cloudposse/atlantis/server/events/mocks"
-	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/runtime"
-	"github.com/cloudposse/atlantis/server/events/terraform"
-	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
-	"github.com/cloudposse/atlantis/server/events/webhooks"
-	"github.com/cloudposse/atlantis/server/events/yaml"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
+	getter "github.com/hashicorp/go-getter"
+	"github.com/runatlantis/atlantis/server/events/db"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+
 	"github.com/google/go-github/github"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/locking"
+	"github.com/runatlantis/atlantis/server/events/mocks"
+	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/runtime"
+	"github.com/runatlantis/atlantis/server/events/terraform"
+	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
+	"github.com/runatlantis/atlantis/server/events/webhooks"
+	"github.com/runatlantis/atlantis/server/events/yaml"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
+
+type NoopTFDownloader struct{}
+
+func (m *NoopTFDownloader) GetFile(dst, src string, opts ...getter.ClientOption) error {
+	return nil
+}
 
 func TestGitHubWorkflow(t *testing.T) {
 	if testing.Short() {
@@ -38,229 +47,346 @@ func TestGitHubWorkflow(t *testing.T) {
 	cases := []struct {
 		Description string
 		// RepoDir is relative to testfixtures/test-repos.
-		RepoDir                string
-		ModifiedFiles          []string
-		ExpAutoplanCommentFile string
-		ExpMergeCommentFile    string
-		CommentAndReplies      []string
+		RepoDir string
+		// ModifiedFiles are the list of files that have been modified in this
+		// pull request.
+		ModifiedFiles []string
+		// Comments are what our mock user writes to the pull request.
+		Comments []string
+		// ExpAutomerge is true if we expect Atlantis to automerge.
+		ExpAutomerge bool
+		// ExpAutoplan is true if we expect Atlantis to autoplan.
+		ExpAutoplan bool
+		// ExpReplies is a list of files containing the expected replies that
+		// Atlantis writes to the pull request in order.
+		ExpReplies []string
 	}{
 		{
-			Description:            "simple",
-			RepoDir:                "simple",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis apply", "exp-output-apply.txt",
+			Description:   "simple",
+			RepoDir:       "simple",
+			ModifiedFiles: []string{"main.tf"},
+			Comments: []string{
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply.txt",
+				"exp-output-merge.txt",
+			},
+			ExpAutoplan: true,
 		},
 		{
-			Description:            "simple with plan comment",
-			RepoDir:                "simple",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis plan", "exp-output-autoplan.txt",
-				"atlantis apply", "exp-output-apply.txt",
+			Description:   "simple with plan comment",
+			RepoDir:       "simple",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis plan",
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-autoplan.txt",
+				"exp-output-apply.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "simple with comment -var",
-			RepoDir:                "simple",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis plan -- -var var=overridden", "exp-output-atlantis-plan-var-overridden.txt",
-				"atlantis apply", "exp-output-apply-var.txt",
+			Description:   "simple with comment -var",
+			RepoDir:       "simple",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis plan -- -var var=overridden",
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-atlantis-plan-var-overridden.txt",
+				"exp-output-apply-var.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "simple with workspaces",
-			RepoDir:                "simple",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis plan -- -var var=default_workspace", "exp-output-atlantis-plan.txt",
-				"atlantis plan -w new_workspace -- -var var=new_workspace", "exp-output-atlantis-plan-new-workspace.txt",
-				"atlantis apply -w default", "exp-output-apply-var-default-workspace.txt",
-				"atlantis apply -w new_workspace", "exp-output-apply-var-new-workspace.txt",
+			Description:   "simple with workspaces",
+			RepoDir:       "simple",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis plan -- -var var=default_workspace",
+				"atlantis plan -w new_workspace -- -var var=new_workspace",
+				"atlantis apply -w default",
+				"atlantis apply -w new_workspace",
 			},
-			ExpMergeCommentFile: "exp-output-merge-workspaces.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-atlantis-plan.txt",
+				"exp-output-atlantis-plan-new-workspace.txt",
+				"exp-output-apply-var-default-workspace.txt",
+				"exp-output-apply-var-new-workspace.txt",
+				"exp-output-merge-workspaces.txt",
+			},
 		},
 		{
-			Description:            "simple with workspaces and apply all",
-			RepoDir:                "simple",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis plan -- -var var=default_workspace", "exp-output-atlantis-plan.txt",
-				"atlantis plan -w new_workspace -- -var var=new_workspace", "exp-output-atlantis-plan-new-workspace.txt",
-				"atlantis apply", "exp-output-apply-var-all.txt",
+			Description:   "simple with workspaces and apply all",
+			RepoDir:       "simple",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis plan -- -var var=default_workspace",
+				"atlantis plan -w new_workspace -- -var var=new_workspace",
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge-workspaces.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-atlantis-plan.txt",
+				"exp-output-atlantis-plan-new-workspace.txt",
+				"exp-output-apply-var-all.txt",
+				"exp-output-merge-workspaces.txt",
+			},
 		},
 		{
-			Description:            "simple with atlantis.yaml",
-			RepoDir:                "simple-yaml",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis apply -w staging", "exp-output-apply-staging.txt",
-				"atlantis apply -w default", "exp-output-apply-default.txt",
+			Description:   "simple with atlantis.yaml",
+			RepoDir:       "simple-yaml",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis apply -w staging",
+				"atlantis apply -w default",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-apply-default.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "simple with atlantis.yaml and apply all",
-			RepoDir:                "simple-yaml",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis apply", "exp-output-apply-all.txt",
+			Description:   "simple with atlantis.yaml and apply all",
+			RepoDir:       "simple-yaml",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-all.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "simple with atlantis.yaml and plan/apply all",
-			RepoDir:                "simple-yaml",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis plan", "exp-output-autoplan.txt",
-				"atlantis apply", "exp-output-apply-all.txt",
+			Description:   "simple with atlantis.yaml and plan/apply all",
+			RepoDir:       "simple-yaml",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis plan",
+				"atlantis apply",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-autoplan.txt",
+				"exp-output-apply-all.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "modules staging only",
-			RepoDir:                "modules",
-			ModifiedFiles:          []string{"staging/main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan-only-staging.txt",
-			CommentAndReplies: []string{
-				"atlantis apply -d staging", "exp-output-apply-staging.txt",
+			Description:   "modules staging only",
+			RepoDir:       "modules",
+			ModifiedFiles: []string{"staging/main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis apply -d staging",
 			},
-			ExpMergeCommentFile: "exp-output-merge-only-staging.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan-only-staging.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-merge-only-staging.txt",
+			},
 		},
 		{
-			Description:            "modules modules only",
-			RepoDir:                "modules",
-			ModifiedFiles:          []string{"modules/null/main.tf"},
-			ExpAutoplanCommentFile: "",
-			CommentAndReplies: []string{
-				"atlantis plan -d staging", "exp-output-plan-staging.txt",
-				"atlantis plan -d production", "exp-output-plan-production.txt",
-				"atlantis apply -d staging", "exp-output-apply-staging.txt",
-				"atlantis apply -d production", "exp-output-apply-production.txt",
+			Description:   "modules modules only",
+			RepoDir:       "modules",
+			ModifiedFiles: []string{"modules/null/main.tf"},
+			ExpAutoplan:   false,
+			Comments: []string{
+				"atlantis plan -d staging",
+				"atlantis plan -d production",
+				"atlantis apply -d staging",
+				"atlantis apply -d production",
 			},
-			ExpMergeCommentFile: "exp-output-merge-all-dirs.txt",
+			ExpReplies: []string{
+				"exp-output-plan-staging.txt",
+				"exp-output-plan-production.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-apply-production.txt",
+				"exp-output-merge-all-dirs.txt",
+			},
 		},
 		{
-			Description:            "modules-yaml",
-			RepoDir:                "modules-yaml",
-			ModifiedFiles:          []string{"modules/null/main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis apply -d staging", "exp-output-apply-staging.txt",
-				"atlantis apply -d production", "exp-output-apply-production.txt",
+			Description:   "modules-yaml",
+			RepoDir:       "modules-yaml",
+			ModifiedFiles: []string{"modules/null/main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis apply -d staging",
+				"atlantis apply -d production",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-apply-production.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "tfvars-yaml",
-			RepoDir:                "tfvars-yaml",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "exp-output-autoplan.txt",
-			CommentAndReplies: []string{
-				"atlantis apply -p staging", "exp-output-apply-staging.txt",
-				"atlantis apply -p default", "exp-output-apply-default.txt",
+			Description:   "tfvars-yaml",
+			RepoDir:       "tfvars-yaml",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   true,
+			Comments: []string{
+				"atlantis apply -p staging",
+				"atlantis apply -p default",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-apply-default.txt",
+				"exp-output-merge.txt",
+			},
 		},
 		{
-			Description:            "tfvars no autoplan",
-			RepoDir:                "tfvars-yaml-no-autoplan",
-			ModifiedFiles:          []string{"main.tf"},
-			ExpAutoplanCommentFile: "",
-			CommentAndReplies: []string{
-				"atlantis plan -p staging", "exp-output-plan-staging.txt",
-				"atlantis plan -p default", "exp-output-plan-default.txt",
-				"atlantis apply -p staging", "exp-output-apply-staging.txt",
-				"atlantis apply -p default", "exp-output-apply-default.txt",
+			Description:   "tfvars no autoplan",
+			RepoDir:       "tfvars-yaml-no-autoplan",
+			ModifiedFiles: []string{"main.tf"},
+			ExpAutoplan:   false,
+			Comments: []string{
+				"atlantis plan -p staging",
+				"atlantis plan -p default",
+				"atlantis apply -p staging",
+				"atlantis apply -p default",
 			},
-			ExpMergeCommentFile: "exp-output-merge.txt",
+			ExpReplies: []string{
+				"exp-output-plan-staging.txt",
+				"exp-output-plan-default.txt",
+				"exp-output-apply-staging.txt",
+				"exp-output-apply-default.txt",
+				"exp-output-merge.txt",
+			},
+		},
+		{
+			Description:   "automerge",
+			RepoDir:       "automerge",
+			ExpAutomerge:  true,
+			ExpAutoplan:   true,
+			ModifiedFiles: []string{"dir1/main.tf", "dir2/main.tf"},
+			Comments: []string{
+				"atlantis apply -d dir1",
+				"atlantis apply -d dir2",
+			},
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-dir1.txt",
+				"exp-output-apply-dir2.txt",
+				"exp-output-automerge.txt",
+				"exp-output-merge.txt",
+			},
+		},
+		{
+			Description:   "server-side cfg",
+			RepoDir:       "server-side-cfg",
+			ExpAutomerge:  false,
+			ExpAutoplan:   true,
+			ModifiedFiles: []string{"main.tf"},
+			Comments: []string{
+				"atlantis apply -w staging",
+				"atlantis apply -w default",
+			},
+			ExpReplies: []string{
+				"exp-output-autoplan.txt",
+				"exp-output-apply-staging-workspace.txt",
+				"exp-output-apply-default-workspace.txt",
+				"exp-output-merge.txt",
+			},
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.Description, func(t *testing.T) {
 			RegisterMockTestingT(t)
 
-			ctrl, vcsClient, githubGetter, atlantisWorkspace := setupE2E(t)
+			ctrl, vcsClient, githubGetter, atlantisWorkspace := setupE2E(t, c.RepoDir)
 			// Set the repo to be cloned through the testing backdoor.
 			repoDir, headSHA, cleanup := initializeRepo(t, c.RepoDir)
 			defer cleanup()
-			atlantisWorkspace.TestingOverrideCloneURL = fmt.Sprintf("file://%s", repoDir)
+			atlantisWorkspace.TestingOverrideHeadCloneURL = fmt.Sprintf("file://%s", repoDir)
 
 			// Setup test dependencies.
 			w := httptest.NewRecorder()
 			When(githubGetter.GetPullRequest(AnyRepo(), AnyInt())).ThenReturn(GitHubPullRequestParsed(headSHA), nil)
 			When(vcsClient.GetModifiedFiles(AnyRepo(), matchers.AnyModelsPullRequest())).ThenReturn(c.ModifiedFiles, nil)
-			expNumTimesCalledCreateComment := 0
 
-			// First, send the open pull request event and trigger an autoplan.
+			// First, send the open pull request event which triggers autoplan.
 			pullOpenedReq := GitHubPullRequestOpenedEvent(t, headSHA)
 			ctrl.Post(w, pullOpenedReq)
 			responseContains(t, w, 200, "Processing...")
-			if c.ExpAutoplanCommentFile != "" {
-				expNumTimesCalledCreateComment++
-				_, _, autoplanComment := vcsClient.VerifyWasCalledOnce().CreateComment(AnyRepo(), AnyInt(), AnyString()).GetCapturedArguments()
-				assertCommentEquals(t, c.ExpAutoplanCommentFile, autoplanComment, c.RepoDir)
-			}
 
 			// Now send any other comments.
-			for i := 0; i < len(c.CommentAndReplies); i += 2 {
-				comment := c.CommentAndReplies[i]
-				expOutputFile := c.CommentAndReplies[i+1]
-
+			for _, comment := range c.Comments {
 				commentReq := GitHubCommentEvent(t, comment)
 				w = httptest.NewRecorder()
 				ctrl.Post(w, commentReq)
 				responseContains(t, w, 200, "Processing...")
-				// Each comment warrants a response. The comments are at the
-				// even indices.
-				if i%2 == 0 {
-					expNumTimesCalledCreateComment++
-				}
-				_, _, atlantisComment := vcsClient.VerifyWasCalled(Times(expNumTimesCalledCreateComment)).CreateComment(AnyRepo(), AnyInt(), AnyString()).GetCapturedArguments()
-				assertCommentEquals(t, expOutputFile, atlantisComment, c.RepoDir)
 			}
 
-			// Finally, send the pull request merged event.
+			// Send the "pull closed" event which would be triggered by the
+			// automerge or a manual merge.
 			pullClosedReq := GitHubPullRequestClosedEvent(t)
 			w = httptest.NewRecorder()
 			ctrl.Post(w, pullClosedReq)
 			responseContains(t, w, 200, "Pull request cleaned successfully")
-			expNumTimesCalledCreateComment++
-			_, _, pullClosedComment := vcsClient.VerifyWasCalled(Times(expNumTimesCalledCreateComment)).CreateComment(AnyRepo(), AnyInt(), AnyString()).GetCapturedArguments()
-			assertCommentEquals(t, c.ExpMergeCommentFile, pullClosedComment, c.RepoDir)
+
+			// Now we're ready to verify Atlantis made all the comments back
+			// (or replies) that we expect.
+			// We expect replies for each comment plus one for the locks deleted
+			// at the end.
+			expNumReplies := len(c.Comments) + 1
+			if c.ExpAutoplan {
+				expNumReplies++
+			}
+			if c.ExpAutomerge {
+				expNumReplies++
+			}
+
+			_, _, actReplies := vcsClient.VerifyWasCalled(Times(expNumReplies)).CreateComment(AnyRepo(), AnyInt(), AnyString()).GetAllCapturedArguments()
+			Assert(t, len(c.ExpReplies) == len(actReplies), "missing expected replies, got %d but expected %d", len(actReplies), len(c.ExpReplies))
+			for i, expReply := range c.ExpReplies {
+				assertCommentEquals(t, expReply, actReplies[i], c.RepoDir)
+			}
+
+			if c.ExpAutomerge {
+				// Verify that the merge API call was made.
+				vcsClient.VerifyWasCalledOnce().MergePull(matchers.AnyModelsPullRequest())
+			} else {
+				vcsClient.VerifyWasCalled(Never()).MergePull(matchers.AnyModelsPullRequest())
+			}
 		})
 	}
 }
 
-func setupE2E(t *testing.T) (server.EventsController, *vcsmocks.MockClientProxy, *mocks.MockGithubPullGetter, *events.FileWorkspace) {
+func setupE2E(t *testing.T, repoDir string) (server.EventsController, *vcsmocks.MockClient, *mocks.MockGithubPullGetter, *events.FileWorkspace) {
 	allowForkPRs := false
 	dataDir, cleanup := TempDir(t)
 	defer cleanup()
 
 	// Mocks.
-	e2eVCSClient := vcsmocks.NewMockClientProxy()
-	e2eStatusUpdater := mocks.NewMockCommitStatusUpdater()
+	e2eVCSClient := vcsmocks.NewMockClient()
+	e2eStatusUpdater := &events.DefaultCommitStatusUpdater{Client: e2eVCSClient}
 	e2eGithubGetter := mocks.NewMockGithubPullGetter()
 	e2eGitlabGetter := mocks.NewMockGitlabMergeRequestGetter()
 
 	// Real dependencies.
-	logger := logging.NewSimpleLogger("server", nil, true, logging.Debug)
+	logger := logging.NewSimpleLogger("server", true, logging.Debug)
 	eventParser := &events.EventParser{
 		GithubUser:  "github-user",
 		GithubToken: "github-token",
@@ -268,26 +394,31 @@ func setupE2E(t *testing.T) (server.EventsController, *vcsmocks.MockClientProxy,
 		GitlabToken: "gitlab-token",
 	}
 	commentParser := &events.CommentParser{
-		GithubUser:  "github-user",
-		GithubToken: "github-token",
-		GitlabUser:  "gitlab-user",
-		GitlabToken: "gitlab-token",
+		GithubUser: "github-user",
+		GitlabUser: "gitlab-user",
 	}
-	terraformClient, err := terraform.NewClient(dataDir)
+	terraformClient, err := terraform.NewClient(logger, dataDir, "", "", "default-tf-version", &NoopTFDownloader{})
 	Ok(t, err)
-	boltdb, err := boltdb.New(dataDir)
+	boltdb, err := db.New(dataDir)
 	Ok(t, err)
 	lockingClient := locking.NewClient(boltdb)
 	projectLocker := &events.DefaultProjectLocker{
 		Locker: lockingClient,
 	}
 	workingDir := &events.FileWorkspace{
-		DataDir:                 dataDir,
-		TestingOverrideCloneURL: "override-me",
+		DataDir:                     dataDir,
+		TestingOverrideHeadCloneURL: "override-me",
 	}
 
-	defaultTFVersion := terraformClient.Version()
+	defaultTFVersion := terraformClient.DefaultVersion()
 	locker := events.NewDefaultWorkingDirLocker()
+	parser := &yaml.ParserValidator{}
+	globalCfg := valid.NewGlobalCfg(true, false, false)
+	expCfgPath := filepath.Join(absRepoPath(t, repoDir), "repos.yaml")
+	if _, err := os.Stat(expCfgPath); err == nil {
+		globalCfg, err = parser.ParseGlobalCfg(expCfgPath, globalCfg)
+		Ok(t, err)
+	}
 	commandRunner := &events.DefaultCommandRunner{
 		ProjectCommandRunner: &events.DefaultProjectCommandRunner{
 			Locker:           projectLocker,
@@ -321,17 +452,19 @@ func setupE2E(t *testing.T) (server.EventsController, *vcsmocks.MockClientProxy,
 		AllowForkPRs:             allowForkPRs,
 		AllowForkPRsFlag:         "allow-fork-prs",
 		ProjectCommandBuilder: &events.DefaultProjectCommandBuilder{
-			ParserValidator:     &yaml.ParserValidator{},
-			ProjectFinder:       &events.DefaultProjectFinder{},
-			VCSClient:           e2eVCSClient,
-			WorkingDir:          workingDir,
-			WorkingDirLocker:    locker,
-			AllowRepoConfigFlag: "allow-repo-config",
-			AllowRepoConfig:     true,
-			RepoConfig:          "atlantis.yaml",
-			PendingPlanFinder:   &events.PendingPlanFinder{},
-			CommentBuilder:      commentParser,
+			ParserValidator:   parser,
+			ProjectFinder:     &events.DefaultProjectFinder{},
+			VCSClient:         e2eVCSClient,
+			WorkingDir:        workingDir,
+			WorkingDirLocker:  locker,
+			PendingPlanFinder: &events.DefaultPendingPlanFinder{},
+			CommentBuilder:    commentParser,
+			GlobalCfg:         globalCfg,
 		},
+		DB:                boltdb,
+		PendingPlanFinder: &events.DefaultPendingPlanFinder{},
+		GlobalAutomerge:   false,
+		WorkingDir:        workingDir,
 	}
 
 	repoWhitelistChecker, err := events.NewRepoWhitelistChecker("*")
@@ -344,6 +477,7 @@ func setupE2E(t *testing.T) (server.EventsController, *vcsmocks.MockClientProxy,
 			Locker:     lockingClient,
 			VCSClient:  e2eVCSClient,
 			WorkingDir: workingDir,
+			DB:         boltdb,
 		},
 		Logger:                       logger,
 		Parser:                       eventParser,
@@ -415,17 +549,18 @@ func GitHubPullRequestParsed(headSHA string) *github.PullRequest {
 		HTMLURL: github.String("htmlurl"),
 		Head: &github.PullRequestBranch{
 			Repo: &github.Repository{
-				FullName: github.String("cloudposse/atlantis-tests"),
-				CloneURL: github.String("/cloudposse/atlantis-tests.git"),
+				FullName: github.String("runatlantis/atlantis-tests"),
+				CloneURL: github.String("https://github.com/runatlantis/atlantis-tests.git"),
 			},
 			SHA: github.String(headSHA),
 			Ref: github.String("branch"),
 		},
 		Base: &github.PullRequestBranch{
 			Repo: &github.Repository{
-				FullName: github.String("cloudposse/atlantis-tests"),
-				CloneURL: github.String("/cloudposse/atlantis-tests.git"),
+				FullName: github.String("runatlantis/atlantis-tests"),
+				CloneURL: github.String("https://github.com/runatlantis/atlantis-tests.git"),
 			},
+			Ref: github.String("master"),
 		},
 		User: &github.User{
 			Login: github.String("atlantisbot"),
@@ -457,7 +592,7 @@ func initializeRepo(t *testing.T, repoDir string) (string, string, func()) {
 	runCmd(t, destDir, "git", "init")
 	runCmd(t, destDir, "touch", ".gitkeep")
 	runCmd(t, destDir, "git", "add", ".gitkeep")
-	runCmd(t, destDir, "git", "config", "--local", "user.email", "atlantisbot@cloudposse.io")
+	runCmd(t, destDir, "git", "config", "--local", "user.email", "atlantisbot@runatlantis.io")
 	runCmd(t, destDir, "git", "config", "--local", "user.name", "atlantisbot")
 	runCmd(t, destDir, "git", "commit", "-m", "initial commit")
 	runCmd(t, destDir, "git", "checkout", "-b", "branch")
@@ -487,11 +622,25 @@ func assertCommentEquals(t *testing.T, expFile string, act string, repoDir strin
 	idRegex := regexp.MustCompile(`Creation complete after [0-9]+s \(ID: [0-9]+\)`)
 	act = idRegex.ReplaceAllString(act, "Creation complete after *s (ID: ******************)")
 
-	if string(exp) != act {
+	// Replace all null_resource.simple{n}: .* with null_resource.simple: because
+	// with multiple resources being created the logs are all out of order which
+	// makes comparison impossible.
+	resourceRegex := regexp.MustCompile(`null_resource\.simple\d?:.*`)
+	act = resourceRegex.ReplaceAllString(act, "null_resource.simple:")
+
+	expStr := string(exp)
+	// My editor adds a newline to all the files, so if the actual comment
+	// doesn't end with a newline then strip the last newline from the file's
+	// contents.
+	if !strings.HasSuffix(act, "\n") {
+		expStr = strings.TrimSuffix(expStr, "\n")
+	}
+
+	if expStr != act {
 		// If in CI, we write the diff to the console. Otherwise we write the diff
 		// to file so we can use our local diff viewer.
 		if os.Getenv("CI") == "true" {
-			t.Logf("exp: %s, got: %s", string(exp), act)
+			t.Logf("exp: %s, got: %s", expStr, act)
 			t.FailNow()
 		} else {
 			actFile := filepath.Join(absRepoPath(t, repoDir), expFile+".act")

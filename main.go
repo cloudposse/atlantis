@@ -15,11 +15,12 @@
 package main
 
 import (
-	"github.com/cloudposse/atlantis/cmd"
+	"github.com/runatlantis/atlantis/cmd"
+	"github.com/runatlantis/atlantis/server/logging"
 	"github.com/spf13/viper"
 )
 
-const atlantisVersion = "0.5.0"
+const atlantisVersion = "0.7.1"
 
 func main() {
 	v := viper.New()
@@ -30,6 +31,7 @@ func main() {
 		ServerCreator:   &cmd.DefaultServerCreator{},
 		Viper:           v,
 		AtlantisVersion: atlantisVersion,
+		Logger:          logging.NewSimpleLogger("cmd", false, logging.Info),
 	}
 	version := &cmd.VersionCmd{AtlantisVersion: atlantisVersion}
 	testdrive := &cmd.TestdriveCmd{}
