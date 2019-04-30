@@ -1,6 +1,6 @@
 package raw
 
-import "github.com/runatlantis/atlantis/server/events/yaml/valid"
+import "github.com/cloudposse/atlantis/server/events/yaml/valid"
 
 // DefaultAutoPlanWhenModified is the default element in the when_modified
 // list if none is defined.

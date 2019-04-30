@@ -4,8 +4,8 @@ package matchers
 import (
 	"reflect"
 
+	logging "github.com/cloudposse/atlantis/server/logging"
 	"github.com/petergtz/pegomock"
-	logging "github.com/runatlantis/atlantis/server/logging"
 )
 
 func AnyPtrToLoggingSimpleLogger() *logging.SimpleLogger {

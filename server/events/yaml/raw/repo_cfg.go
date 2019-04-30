@@ -3,8 +3,8 @@ package raw
 import (
 	"errors"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	validation "github.com/go-ozzo/ozzo-validation"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 // DefaultAutomerge is the default setting for automerge.

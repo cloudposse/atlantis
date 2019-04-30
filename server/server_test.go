@@ -25,16 +25,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 
+	"github.com/cloudposse/atlantis/server"
+	"github.com/cloudposse/atlantis/server/events/locking/mocks"
+	"github.com/cloudposse/atlantis/server/events/models"
+	sMocks "github.com/cloudposse/atlantis/server/mocks"
+	. "github.com/cloudposse/atlantis/testing"
 	"github.com/gorilla/mux"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server"
-	"github.com/runatlantis/atlantis/server/events/locking/mocks"
-	"github.com/runatlantis/atlantis/server/events/models"
-	sMocks "github.com/runatlantis/atlantis/server/mocks"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestNewServer(t *testing.T) {

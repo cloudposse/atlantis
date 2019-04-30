@@ -4,9 +4,9 @@
 package mocks
 
 import (
+	models "github.com/cloudposse/atlantis/server/events/models"
+	logging "github.com/cloudposse/atlantis/server/logging"
 	pegomock "github.com/petergtz/pegomock"
-	models "github.com/runatlantis/atlantis/server/events/models"
-	logging "github.com/runatlantis/atlantis/server/logging"
 	"reflect"
 	"time"
 )

@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	version "github.com/hashicorp/go-version"
 	gitlab "github.com/lkysow/go-gitlab"
-	"github.com/runatlantis/atlantis/server/events/models"
 
-	. "github.com/runatlantis/atlantis/testing"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 // Test that the base url gets set properly.

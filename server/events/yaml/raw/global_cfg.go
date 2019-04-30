@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	validation "github.com/go-ozzo/ozzo-validation"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 // GlobalCfg is the raw schema for server-side repo config.

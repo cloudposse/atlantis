@@ -29,24 +29,24 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/runatlantis/atlantis/server/events/db"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/events/db"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/locking"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	"github.com/cloudposse/atlantis/server/events/terraform"
+	"github.com/cloudposse/atlantis/server/events/vcs"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
+	"github.com/cloudposse/atlantis/server/events/webhooks"
+	"github.com/cloudposse/atlantis/server/events/yaml"
+	"github.com/cloudposse/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/server/static"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/locking"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	"github.com/runatlantis/atlantis/server/events/terraform"
-	"github.com/runatlantis/atlantis/server/events/vcs"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
-	"github.com/runatlantis/atlantis/server/events/webhooks"
-	"github.com/runatlantis/atlantis/server/events/yaml"
-	"github.com/runatlantis/atlantis/server/logging"
-	"github.com/runatlantis/atlantis/server/static"
 	"github.com/urfave/cli"
 	"github.com/urfave/negroni"
 )
@@ -296,6 +296,10 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	githubTeamWhitelistChecker, err := events.NewTeamWhitelistChecker(userConfig.GithubTeamWhitelist)
+	if err != nil {
+		return nil, err
+	}
 	locksController := &LocksController{
 		AtlantisVersion:    config.AtlantisVersion,
 		AtlantisURL:        parsedURL,
@@ -315,6 +319,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		Logger:                       logger,
 		GithubWebhookSecret:          []byte(userConfig.GithubWebhookSecret),
 		GithubRequestValidator:       &DefaultGithubRequestValidator{},
+		TeamWhitelistChecker:         githubTeamWhitelistChecker,
 		GitlabRequestParserValidator: &DefaultGitlabRequestParserValidator{},
 		GitlabWebhookSecret:          []byte(userConfig.GitlabWebhookSecret),
 		RepoWhitelistChecker:         repoWhitelist,

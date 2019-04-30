@@ -1,6 +1,6 @@
 package server
 
-import "github.com/runatlantis/atlantis/server/logging"
+import "github.com/cloudposse/atlantis/server/logging"
 
 // UserConfig holds config values passed in by the user.
 // The mapstructure tags correspond to flags in cmd/server.go and are used when
@@ -17,6 +17,7 @@ type UserConfig struct {
 	CheckoutStrategy       string `mapstructure:"checkout-strategy"`
 	DataDir                string `mapstructure:"data-dir"`
 	GithubHostname         string `mapstructure:"gh-hostname"`
+	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
 	GithubToken            string `mapstructure:"gh-token"`
 	GithubUser             string `mapstructure:"gh-user"`
 	GithubWebhookSecret    string `mapstructure:"gh-webhook-secret"`

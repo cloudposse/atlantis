@@ -4,8 +4,8 @@
 package mocks
 
 import (
+	events "github.com/cloudposse/atlantis/server/events"
 	pegomock "github.com/petergtz/pegomock"
-	events "github.com/runatlantis/atlantis/server/events"
 	"reflect"
 	"time"
 )

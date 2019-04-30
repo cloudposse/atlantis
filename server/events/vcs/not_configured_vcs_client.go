@@ -16,7 +16,7 @@ package vcs
 import (
 	"fmt"
 
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 // NotConfiguredVCSClient is used as a placeholder when Atlantis isn't configured
@@ -46,4 +46,7 @@ func (a *NotConfiguredVCSClient) MergePull(pull models.PullRequest) error {
 }
 func (a *NotConfiguredVCSClient) err() error {
 	return fmt.Errorf("atlantis was not configured to support repos from %s", a.Host.String())
+}
+func (a *NotConfiguredVCSClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return nil, a.err()
 }

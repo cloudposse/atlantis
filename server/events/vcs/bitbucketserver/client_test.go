@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
-	. "github.com/runatlantis/atlantis/testing"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 // Test that we include the base path in our base url.
