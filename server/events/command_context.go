@@ -14,8 +14,8 @@
 package events
 
 import (
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/logging"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // CommandContext represents the context of a command that should be executed

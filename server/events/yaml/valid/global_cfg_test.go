@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/yaml"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
 	"github.com/mohae/deepcopy"
+	"github.com/runatlantis/atlantis/server/events/yaml"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestNewGlobalCfg(t *testing.T) {

@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudposse/atlantis/testdrive"
+	"github.com/runatlantis/atlantis/testdrive"
 	"github.com/spf13/cobra"
 )
 

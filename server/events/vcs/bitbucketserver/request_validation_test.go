@@ -3,8 +3,8 @@ package bitbucketserver_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestValidateSignature(t *testing.T) {

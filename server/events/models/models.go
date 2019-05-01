@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudposse/atlantis/server/logging"
 	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/logging"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 // Repo is a VCS repository.

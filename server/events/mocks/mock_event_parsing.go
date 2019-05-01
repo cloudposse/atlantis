@@ -4,10 +4,10 @@
 package mocks
 
 import (
-	models "github.com/cloudposse/atlantis/server/events/models"
 	github "github.com/google/go-github/github"
 	go_gitlab "github.com/lkysow/go-gitlab"
 	pegomock "github.com/petergtz/pegomock"
+	models "github.com/runatlantis/atlantis/server/events/models"
 	"reflect"
 	"time"
 )

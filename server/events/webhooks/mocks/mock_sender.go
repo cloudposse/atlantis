@@ -4,9 +4,9 @@
 package mocks
 
 import (
-	webhooks "github.com/cloudposse/atlantis/server/events/webhooks"
-	logging "github.com/cloudposse/atlantis/server/logging"
 	pegomock "github.com/petergtz/pegomock"
+	webhooks "github.com/runatlantis/atlantis/server/events/webhooks"
+	logging "github.com/runatlantis/atlantis/server/logging"
 	"reflect"
 	"time"
 )

@@ -19,12 +19,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
 	"github.com/google/go-github/github"
 	gitlab "github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
 	validator "gopkg.in/go-playground/validator.v9"
 )
 

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs"
-	"github.com/cloudposse/atlantis/server/events/yaml"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/events/yaml"
 )
 
 const (

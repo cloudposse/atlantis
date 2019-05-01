@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/logging"
 	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 const MergeableApplyReq = "mergeable"

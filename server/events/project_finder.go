@@ -19,12 +19,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // ProjectFinder determines which projects were modified in a given pull

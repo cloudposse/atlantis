@@ -4,8 +4,8 @@ package matchers
 import (
 	"reflect"
 
-	models "github.com/cloudposse/atlantis/server/events/models"
 	"github.com/petergtz/pegomock"
+	models "github.com/runatlantis/atlantis/server/events/models"
 )
 
 func AnyModelsPullRequest() models.PullRequest {

@@ -1,8 +1,8 @@
 package runtime
 
 import (
-	"github.com/cloudposse/atlantis/server/events/models"
 	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // InitStep runs `terraform init`.

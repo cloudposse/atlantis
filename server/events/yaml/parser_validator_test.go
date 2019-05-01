@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/yaml"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	. "github.com/cloudposse/atlantis/testing"
 	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/events/yaml"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var globalCfg = valid.NewGlobalCfg(true, false, false)

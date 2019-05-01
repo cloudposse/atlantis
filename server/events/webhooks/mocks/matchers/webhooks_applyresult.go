@@ -2,8 +2,8 @@
 package matchers
 
 import (
-	webhooks "github.com/cloudposse/atlantis/server/events/webhooks"
 	"github.com/petergtz/pegomock"
+	webhooks "github.com/runatlantis/atlantis/server/events/webhooks"
 	"reflect"
 )
 

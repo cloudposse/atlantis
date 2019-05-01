@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // BoltDB is a database using BoltDB
