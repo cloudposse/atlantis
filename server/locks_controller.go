@@ -5,23 +5,27 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/locking"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs"
-	"github.com/cloudposse/atlantis/server/logging"
+	"github.com/runatlantis/atlantis/server/events/db"
+
 	"github.com/gorilla/mux"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/locking"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 // LocksController handles all requests relating to Atlantis locks.
 type LocksController struct {
 	AtlantisVersion    string
+	AtlantisURL        *url.URL
 	Locker             locking.Locker
 	Logger             *logging.SimpleLogger
-	VCSClient          vcs.ClientProxy
+	VCSClient          vcs.Client
 	LockDetailTemplate TemplateWriter
 	WorkingDir         events.WorkingDir
 	WorkingDirLocker   events.WorkingDirLocker
+	DB                 *db.BoltDB
 }
 
 // GetLock is the GET /locks/{id} route. It renders the lock detail view.
@@ -57,8 +61,12 @@ func (l *LocksController) GetLock(w http.ResponseWriter, r *http.Request) {
 		LockedBy:        lock.Pull.Author,
 		Workspace:       lock.Workspace,
 		AtlantisVersion: l.AtlantisVersion,
+		CleanedBasePath: l.AtlantisURL.Path,
 	}
-	l.LockDetailTemplate.Execute(w, viewData) // nolint: errcheck
+	err = l.LockDetailTemplate.Execute(w, viewData)
+	if err != nil {
+		l.Logger.Err(err.Error())
+	}
 }
 
 // DeleteLock handles deleting the lock at id and commenting back on the
@@ -98,6 +106,9 @@ func (l *LocksController) DeleteLock(w http.ResponseWriter, r *http.Request) {
 			if err := l.WorkingDir.DeleteForWorkspace(lock.Pull.BaseRepo, lock.Pull, lock.Workspace); err != nil {
 				l.Logger.Err("unable to delete workspace: %s", err)
 			}
+		}
+		if err := l.DB.DeleteProjectStatus(lock.Pull, lock.Workspace, lock.Project.Path); err != nil {
+			l.Logger.Err("unable to delete project status: %s", err)
 		}
 
 		// Once the lock has been deleted, comment back on the pull request.

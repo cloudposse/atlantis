@@ -16,9 +16,9 @@ package events
 import (
 	"fmt"
 
-	"github.com/cloudposse/atlantis/server/events/locking"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/logging"
+	"github.com/runatlantis/atlantis/server/events/locking"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_project_lock.go ProjectLocker
@@ -63,7 +63,8 @@ func (p *DefaultProjectLocker) TryLock(log *logging.SimpleLogger, pull models.Pu
 	}
 	if !lockAttempt.LockAcquired && lockAttempt.CurrLock.Pull.Num != pull.Num {
 		failureMsg := fmt.Sprintf(
-			"This project is currently locked by #%d. The locking plan must be applied or discarded before future plans can execute.",
+			"This project is currently locked by an unapplied plan from pull #%d. To continue, delete the lock from #%d or apply that plan and merge the pull request.\n\nOnce the lock is released, comment `atlantis plan` here to re-plan.",
+			lockAttempt.CurrLock.Pull.Num,
 			lockAttempt.CurrLock.Pull.Num)
 		return &TryLockResponse{
 			LockAcquired:      false,

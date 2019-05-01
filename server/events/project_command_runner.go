@@ -19,14 +19,24 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/runtime"
-	"github.com/cloudposse/atlantis/server/events/webhooks"
-	"github.com/cloudposse/atlantis/server/events/yaml/raw"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/runtime"
+	"github.com/runatlantis/atlantis/server/events/webhooks"
+	"github.com/runatlantis/atlantis/server/events/yaml/raw"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/logging"
 )
+
+// DirNotExistErr is an error caused by the directory not existing.
+type DirNotExistErr struct {
+	RepoRelDir string
+}
+
+// Error implements the error interface.
+func (d DirNotExistErr) Error() string {
+	return fmt.Sprintf("dir %q does not exist", d.RepoRelDir)
+}
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_lock_url_generator.go LockURLGenerator
 
@@ -45,6 +55,14 @@ type StepRunner interface {
 	Run(ctx models.ProjectCommandContext, extraArgs []string, path string) (string, error)
 }
 
+//go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_custom_step_runner.go CustomStepRunner
+
+// CustomStepRunner runs custom run steps.
+type CustomStepRunner interface {
+	// Run cmd in path.
+	Run(ctx models.ProjectCommandContext, cmd string, path string) (string, error)
+}
+
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_webhooks_sender.go WebhooksSender
 
 // WebhooksSender sends webhook.
@@ -53,88 +71,60 @@ type WebhooksSender interface {
 	Send(log *logging.SimpleLogger, res webhooks.ApplyResult) error
 }
 
-// PlanSuccess is the result of a successful plan.
-type PlanSuccess struct {
-	// TerraformOutput is the output from Terraform of running plan.
-	TerraformOutput string
-	// LockURL is the full URL to the lock held by this plan.
-	LockURL string
-	// RePlanCmd is the command that users should run to re-plan this project.
-	RePlanCmd string
-	// ApplyCmd is the command that users should run to apply this plan.
-	ApplyCmd string
-	// DestroyCmd is the command that users should run to destroy this plan.
-	DestroyCmd string
-}
-
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_project_command_runner.go ProjectCommandRunner
 
 // ProjectCommandRunner runs project commands. A project command is a command
 // for a specific TF project.
 type ProjectCommandRunner interface {
 	// Plan runs terraform plan for the project described by ctx.
-	Plan(ctx models.ProjectCommandContext) ProjectResult
+	Plan(ctx models.ProjectCommandContext) models.ProjectResult
 	// Apply runs terraform apply for the project described by ctx.
-	Apply(ctx models.ProjectCommandContext) ProjectResult
-	// Destroy runs terraform destroy for the project described by ctx.
-	Destroy(ctx models.ProjectCommandContext) ProjectResult
+	Apply(ctx models.ProjectCommandContext) models.ProjectResult
 }
 
 // DefaultProjectCommandRunner implements ProjectCommandRunner.
 type DefaultProjectCommandRunner struct {
-	Locker                   ProjectLocker
-	LockURLGenerator         LockURLGenerator
-	InitStepRunner           StepRunner
-	PlanStepRunner           StepRunner
-	ApplyStepRunner          StepRunner
-	DestroyStepRunner        StepRunner
-	RunStepRunner            StepRunner
-	PullApprovedChecker      runtime.PullApprovedChecker
-	PullMergeableChecker     runtime.PullMergeableChecker
-	WorkingDir               WorkingDir
-	Webhooks                 WebhooksSender
-	WorkingDirLocker         WorkingDirLocker
-	RequireApprovalOverride  bool
-	RequireMergeableOverride bool
+	Locker              ProjectLocker
+	LockURLGenerator    LockURLGenerator
+	InitStepRunner      StepRunner
+	PlanStepRunner      StepRunner
+	ApplyStepRunner     StepRunner
+	RunStepRunner       CustomStepRunner
+	PullApprovedChecker runtime.PullApprovedChecker
+	WorkingDir          WorkingDir
+	Webhooks            WebhooksSender
+	WorkingDirLocker    WorkingDirLocker
 }
 
 // Plan runs terraform plan for the project described by ctx.
-func (p *DefaultProjectCommandRunner) Plan(ctx models.ProjectCommandContext) ProjectResult {
+func (p *DefaultProjectCommandRunner) Plan(ctx models.ProjectCommandContext) models.ProjectResult {
 	planSuccess, failure, err := p.doPlan(ctx)
-	return ProjectResult{
+	return models.ProjectResult{
+		Command:     models.PlanCommand,
 		PlanSuccess: planSuccess,
 		Error:       err,
 		Failure:     failure,
 		RepoRelDir:  ctx.RepoRelDir,
 		Workspace:   ctx.Workspace,
+		ProjectName: ctx.ProjectName,
 	}
 }
 
 // Apply runs terraform apply for the project described by ctx.
-func (p *DefaultProjectCommandRunner) Apply(ctx models.ProjectCommandContext) ProjectResult {
+func (p *DefaultProjectCommandRunner) Apply(ctx models.ProjectCommandContext) models.ProjectResult {
 	applyOut, failure, err := p.doApply(ctx)
-	return ProjectResult{
+	return models.ProjectResult{
+		Command:      models.ApplyCommand,
 		Failure:      failure,
 		Error:        err,
 		ApplySuccess: applyOut,
 		RepoRelDir:   ctx.RepoRelDir,
 		Workspace:    ctx.Workspace,
+		ProjectName:  ctx.ProjectName,
 	}
 }
 
-// Destroy runs terraform destroy for the project described by ctx.
-func (p *DefaultProjectCommandRunner) Destroy(ctx models.ProjectCommandContext) ProjectResult {
-	destroyOut, failure, err := p.doDestroy(ctx)
-	return ProjectResult{
-		Failure:        failure,
-		Error:          err,
-		DestroySuccess: destroyOut,
-		RepoRelDir:     ctx.RepoRelDir,
-		Workspace:      ctx.Workspace,
-	}
-}
-
-func (p *DefaultProjectCommandRunner) doPlan(ctx models.ProjectCommandContext) (*PlanSuccess, string, error) {
+func (p *DefaultProjectCommandRunner) doPlan(ctx models.ProjectCommandContext) (*models.PlanSuccess, string, error) {
 	// Acquire Atlantis lock for this repo/dir/workspace.
 	lockAttempt, err := p.Locker.TryLock(ctx.Log, ctx.Pull, ctx.User, ctx.Workspace, models.NewProject(ctx.BaseRepo.FullName, ctx.RepoRelDir))
 	if err != nil {
@@ -161,18 +151,11 @@ func (p *DefaultProjectCommandRunner) doPlan(ctx models.ProjectCommandContext) (
 		return nil, "", cloneErr
 	}
 	projAbsPath := filepath.Join(repoDir, ctx.RepoRelDir)
-
-	// Use default stage unless another workflow is defined in config
-	stage := p.defaultPlanStage()
-	if ctx.ProjectConfig != nil && ctx.ProjectConfig.Workflow != nil {
-		ctx.Log.Debug("project configured to use workflow %q", *ctx.ProjectConfig.Workflow)
-		configuredStage := ctx.GlobalConfig.GetPlanStage(*ctx.ProjectConfig.Workflow)
-		if configuredStage != nil {
-			ctx.Log.Debug("project will use the configured stage for that workflow")
-			stage = *configuredStage
-		}
+	if _, err = os.Stat(projAbsPath); os.IsNotExist(err) {
+		return nil, "", DirNotExistErr{RepoRelDir: ctx.RepoRelDir}
 	}
-	outputs, err := p.runSteps(stage.Steps, ctx, projAbsPath)
+
+	outputs, err := p.runSteps(ctx.Steps, ctx, projAbsPath)
 	if err != nil {
 		if unlockErr := lockAttempt.UnlockFn(); unlockErr != nil {
 			ctx.Log.Err("error unlocking state after plan error: %v", unlockErr)
@@ -180,12 +163,11 @@ func (p *DefaultProjectCommandRunner) doPlan(ctx models.ProjectCommandContext) (
 		return nil, "", fmt.Errorf("%s\n%s", err, strings.Join(outputs, "\n"))
 	}
 
-	return &PlanSuccess{
+	return &models.PlanSuccess{
 		LockURL:         p.LockURLGenerator.GenerateLockURL(lockAttempt.LockKey),
 		TerraformOutput: strings.Join(outputs, "\n"),
 		RePlanCmd:       ctx.RePlanCmd,
 		ApplyCmd:        ctx.ApplyCmd,
-		DestroyCmd:      ctx.DestroyCmd,
 	}, "", nil
 }
 
@@ -201,8 +183,6 @@ func (p *DefaultProjectCommandRunner) runSteps(steps []valid.Step, ctx models.Pr
 			out, err = p.PlanStepRunner.Run(ctx, step.ExtraArgs, absPath)
 		case "apply":
 			out, err = p.ApplyStepRunner.Run(ctx, step.ExtraArgs, absPath)
-		case "destroy":
-			out, err = p.DestroyStepRunner.Run(ctx, step.ExtraArgs, absPath)
 		case "run":
 			out, err = p.RunStepRunner.Run(ctx, step.RunCommand, absPath)
 		}
@@ -221,29 +201,16 @@ func (p *DefaultProjectCommandRunner) doApply(ctx models.ProjectCommandContext) 
 	repoDir, err := p.WorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", "", errors.New("project has not been cloned – did you run plan?")
+			return "", "", errors.New("project has not been cloned–did you run plan?")
 		}
 		return "", "", err
 	}
 	absPath := filepath.Join(repoDir, ctx.RepoRelDir)
-
-	// Figure out what our apply requirements are.
-	var applyRequirements []string
-
-	if p.RequireApprovalOverride || p.RequireMergeableOverride {
-		// If any server flags are set, they override project config.
-		if p.RequireMergeableOverride {
-			applyRequirements = append(applyRequirements, raw.MergeableApplyRequirement)
-		}
-		if p.RequireApprovalOverride {
-			applyRequirements = append(applyRequirements, raw.ApprovedApplyRequirement)
-		}
-	} else if ctx.ProjectConfig != nil {
-		// Else we use the project config if it's set.
-		applyRequirements = ctx.ProjectConfig.ApplyRequirements
+	if _, err = os.Stat(absPath); os.IsNotExist(err) {
+		return "", "", DirNotExistErr{RepoRelDir: ctx.RepoRelDir}
 	}
 
-	for _, req := range applyRequirements {
+	for _, req := range ctx.ApplyRequirements {
 		switch req {
 		case raw.ApprovedApplyRequirement:
 			approved, err := p.PullApprovedChecker.PullIsApproved(ctx.BaseRepo, ctx.Pull) // nolint: vetshadow
@@ -254,11 +221,7 @@ func (p *DefaultProjectCommandRunner) doApply(ctx models.ProjectCommandContext) 
 				return "", "Pull request must be approved before running apply.", nil
 			}
 		case raw.MergeableApplyRequirement:
-			mergeable, err := p.PullMergeableChecker.PullIsMergeable(ctx.BaseRepo, ctx.Pull) // nolint: vetshadow
-			if err != nil {
-				return "", "", errors.Wrap(err, "checking if pull request is mergeable")
-			}
-			if !mergeable {
+			if !ctx.PullMergeable {
 				return "", "Pull request must be mergeable before running apply.", nil
 			}
 		}
@@ -270,15 +233,7 @@ func (p *DefaultProjectCommandRunner) doApply(ctx models.ProjectCommandContext) 
 	}
 	defer unlockFn()
 
-	// Use default stage unless another workflow is defined in config
-	stage := p.defaultApplyStage()
-	if ctx.ProjectConfig != nil && ctx.ProjectConfig.Workflow != nil {
-		configuredStage := ctx.GlobalConfig.GetApplyStage(*ctx.ProjectConfig.Workflow)
-		if configuredStage != nil {
-			stage = *configuredStage
-		}
-	}
-	outputs, err := p.runSteps(stage.Steps, ctx, absPath)
+	outputs, err := p.runSteps(ctx.Steps, ctx, absPath)
 	p.Webhooks.Send(ctx.Log, webhooks.ApplyResult{ // nolint: errcheck
 		Workspace: ctx.Workspace,
 		User:      ctx.User,
@@ -290,97 +245,4 @@ func (p *DefaultProjectCommandRunner) doApply(ctx models.ProjectCommandContext) 
 		return "", "", fmt.Errorf("%s\n%s", err, strings.Join(outputs, "\n"))
 	}
 	return strings.Join(outputs, "\n"), "", nil
-}
-
-func (p *DefaultProjectCommandRunner) doDestroy(ctx models.ProjectCommandContext) (destroyOut string, failure string, err error) {
-	repoDir, err := p.WorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", "", errors.New("project has not been cloned – did you run plan?")
-		}
-		return "", "", err
-	}
-	absPath := filepath.Join(repoDir, ctx.RepoRelDir)
-
-	var destroyRequirements []string
-	if ctx.ProjectConfig != nil {
-		destroyRequirements = ctx.ProjectConfig.DestroyRequirements
-	}
-	// todo: this class shouldn't know about the server-side approval requirement.
-	// Instead the project_command_builder should figure this out and store this information in the ctx. # refactor
-	if p.RequireApprovalOverride {
-		destroyRequirements = []string{raw.ApprovedDestroyRequirement}
-	}
-	for _, req := range destroyRequirements {
-		switch req {
-		case raw.ApprovedDestroyRequirement:
-			approved, err := p.PullApprovedChecker.PullIsApproved(ctx.BaseRepo, ctx.Pull) // nolint: vetshadow
-			if err != nil {
-				return "", "", errors.Wrap(err, "checking if pull request was approved")
-			}
-			if !approved {
-				return "", "Pull request must be approved before running destroy.", nil
-			}
-		}
-	}
-	// Acquire internal lock for the directory we're going to operate in.
-	unlockFn, err := p.WorkingDirLocker.TryLock(ctx.BaseRepo.FullName, ctx.Pull.Num, ctx.Workspace)
-	if err != nil {
-		return "", "", err
-	}
-	defer unlockFn()
-
-	// Use default stage unless another workflow is defined in config
-	stage := p.defaultDestroyStage()
-	if ctx.ProjectConfig != nil && ctx.ProjectConfig.Workflow != nil {
-		configuredStage := ctx.GlobalConfig.GetDestroyStage(*ctx.ProjectConfig.Workflow)
-		if configuredStage != nil {
-			stage = *configuredStage
-		}
-	}
-	outputs, err := p.runSteps(stage.Steps, ctx, absPath)
-	p.Webhooks.Send(ctx.Log, webhooks.ApplyResult{ // nolint: errcheck
-		Workspace: ctx.Workspace,
-		User:      ctx.User,
-		Repo:      ctx.BaseRepo,
-		Pull:      ctx.Pull,
-		Success:   err == nil,
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("%s\n%s", err, strings.Join(outputs, "\n"))
-	}
-	return strings.Join(outputs, "\n"), "", nil
-}
-
-func (p DefaultProjectCommandRunner) defaultPlanStage() valid.Stage {
-	return valid.Stage{
-		Steps: []valid.Step{
-			{
-				StepName: "init",
-			},
-			{
-				StepName: "plan",
-			},
-		},
-	}
-}
-
-func (p DefaultProjectCommandRunner) defaultApplyStage() valid.Stage {
-	return valid.Stage{
-		Steps: []valid.Step{
-			{
-				StepName: "apply",
-			},
-		},
-	}
-}
-
-func (p DefaultProjectCommandRunner) defaultDestroyStage() valid.Stage {
-	return valid.Stage{
-		Steps: []valid.Step{
-			{
-				StepName: "destroy",
-			},
-		},
-	}
 }

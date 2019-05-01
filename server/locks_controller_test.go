@@ -5,19 +5,23 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server"
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/locking/mocks"
-	mocks2 "github.com/cloudposse/atlantis/server/events/mocks"
-	"github.com/cloudposse/atlantis/server/events/models"
-	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
-	"github.com/cloudposse/atlantis/server/logging"
-	sMocks "github.com/cloudposse/atlantis/server/mocks"
+	"github.com/runatlantis/atlantis/server/events/db"
+
 	"github.com/gorilla/mux"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/locking/mocks"
+	mocks2 "github.com/runatlantis/atlantis/server/events/mocks"
+	"github.com/runatlantis/atlantis/server/events/models"
+	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
+	"github.com/runatlantis/atlantis/server/logging"
+	sMocks "github.com/runatlantis/atlantis/server/mocks"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func AnyRepo() models.Repo {
@@ -90,11 +94,14 @@ func TestGetLock_Success(t *testing.T) {
 		Workspace: "workspace",
 	}, nil)
 	tmpl := sMocks.NewMockTemplateWriter()
+	atlantisURL, err := url.Parse("https://example.com/basepath")
+	Ok(t, err)
 	lc := server.LocksController{
 		Logger:             logging.NewNoopLogger(),
 		Locker:             l,
 		LockDetailTemplate: tmpl,
 		AtlantisVersion:    "1300135",
+		AtlantisURL:        atlantisURL,
 	}
 	req, _ := http.NewRequest("GET", "", bytes.NewBuffer(nil))
 	req = mux.SetURLVars(req, map[string]string{"id": "id"})
@@ -109,6 +116,7 @@ func TestGetLock_Success(t *testing.T) {
 		LockedBy:        "lkysow",
 		Workspace:       "workspace",
 		AtlantisVersion: "1300135",
+		CleanedBasePath: "/basepath",
 	})
 	responseContains(t, w, http.StatusOK, "")
 }
@@ -168,7 +176,7 @@ func TestDeleteLock_OldFormat(t *testing.T) {
 	t.Log("If the lock doesn't have BaseRepo set it is deleted successfully")
 	RegisterMockTestingT(t)
 
-	cp := vcsmocks.NewMockClientProxy()
+	cp := vcsmocks.NewMockClient()
 	l := mocks.NewMockLocker()
 	When(l.Unlock("id")).ThenReturn(&models.ProjectLock{}, nil)
 	lc := server.LocksController{
@@ -188,7 +196,7 @@ func TestDeleteLock_CommentFailed(t *testing.T) {
 	t.Log("If the commenting fails we return an error")
 	RegisterMockTestingT(t)
 
-	cp := vcsmocks.NewMockClientProxy()
+	cp := vcsmocks.NewMockClient()
 	workingDir := mocks2.NewMockWorkingDir()
 	workingDirLocker := events.NewDefaultWorkingDirLocker()
 	When(cp.CreateComment(AnyRepo(), AnyInt(), AnyString())).ThenReturn(errors.New("err"))
@@ -198,12 +206,17 @@ func TestDeleteLock_CommentFailed(t *testing.T) {
 			BaseRepo: models.Repo{FullName: "owner/repo"},
 		},
 	}, nil)
+	tmp, cleanup := TempDir(t)
+	defer cleanup()
+	db, err := db.New(tmp)
+	Ok(t, err)
 	lc := server.LocksController{
 		Locker:           l,
 		Logger:           logging.NewNoopLogger(),
 		VCSClient:        cp,
 		WorkingDir:       workingDir,
 		WorkingDirLocker: workingDirLocker,
+		DB:               db,
 	}
 	req, _ := http.NewRequest("GET", "", bytes.NewBuffer(nil))
 	req = mux.SetURLVars(req, map[string]string{"id": "id"})
@@ -216,7 +229,7 @@ func TestDeleteLock_CommentSuccess(t *testing.T) {
 	t.Log("We should comment back on the pull request if the lock is deleted")
 	RegisterMockTestingT(t)
 
-	cp := vcsmocks.NewMockClientProxy()
+	cp := vcsmocks.NewMockClient()
 	l := mocks.NewMockLocker()
 	workingDir := mocks2.NewMockWorkingDir()
 	workingDirLocker := events.NewDefaultWorkingDirLocker()
@@ -231,12 +244,17 @@ func TestDeleteLock_CommentSuccess(t *testing.T) {
 			RepoFullName: "owner/repo",
 		},
 	}, nil)
+	tmp, cleanup := TempDir(t)
+	defer cleanup()
+	db, err := db.New(tmp)
+	Ok(t, err)
 	lc := server.LocksController{
 		Locker:           l,
 		Logger:           logging.NewNoopLogger(),
 		VCSClient:        cp,
 		WorkingDirLocker: workingDirLocker,
 		WorkingDir:       workingDir,
+		DB:               db,
 	}
 	req, _ := http.NewRequest("GET", "", bytes.NewBuffer(nil))
 	req = mux.SetURLVars(req, map[string]string{"id": "id"})

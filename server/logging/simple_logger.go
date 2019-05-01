@@ -20,6 +20,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
+	"time"
 	"unicode"
 )
 
@@ -37,6 +39,7 @@ type SimpleLogging interface {
 	Underlying() *log.Logger
 	// GetLevel returns the current log level.
 	GetLevel() LogLevel
+	NewLogger(string, bool, LogLevel) *SimpleLogger
 }
 
 // SimpleLogger wraps the standard logger with leveled logging
@@ -68,24 +71,14 @@ const (
 // NewSimpleLogger creates a new logger.
 // source is added as a prefix to each log entry. It's useful if you want to
 // trace a log entry back to a specific context, for example a pull request id.
-// logger is the underlying logger. If nil will create a logger from stdlib.
 // keepHistory set to true will store all log entries written using this logger.
 // level will set the level at which logs >= than that level will be written.
 // If keepHistory is set to true, we'll store logs at all levels, regardless of
 // what level is set to.
-func NewSimpleLogger(source string, logger *log.Logger, keepHistory bool, level LogLevel) *SimpleLogger {
-	if logger == nil {
-		flags := log.LstdFlags
-		if level == Debug {
-			// If we're using debug logging, we also have the logger print the
-			// filename the log comes from with log.Lshortfile.
-			flags = flags | log.Lshortfile
-		}
-		logger = log.New(os.Stderr, "", flags)
-	}
+func NewSimpleLogger(source string, keepHistory bool, level LogLevel) *SimpleLogger {
 	return &SimpleLogger{
 		Source:      source,
-		Logger:      logger,
+		Logger:      log.New(os.Stderr, "", 0),
 		Level:       level,
 		KeepHistory: keepHistory,
 	}
@@ -104,20 +97,24 @@ func NewNoopLogger() *SimpleLogger {
 	}
 }
 
-// ToLogLevel converts a log level string to a valid LogLevel object.
-// If the string doesn't match a level, it will return Info.
-func ToLogLevel(levelStr string) LogLevel {
-	switch levelStr {
-	case "debug":
-		return Debug
-	case "info":
-		return Info
-	case "warn":
-		return Warn
-	case "error":
-		return Error
+// NewLogger returns a new logger that reuses the underlying logger.
+func (l *SimpleLogger) NewLogger(source string, keepHistory bool, lvl LogLevel) *SimpleLogger {
+	if l == nil {
+		return nil
 	}
-	return Info
+	return &SimpleLogger{
+		Source:      source,
+		Level:       lvl,
+		Logger:      l.Underlying(),
+		KeepHistory: keepHistory,
+	}
+}
+
+// SetLevel changes the level that this logger is writing at to lvl.
+func (l *SimpleLogger) SetLevel(lvl LogLevel) {
+	if l != nil {
+		l.Level = lvl
+	}
 }
 
 // Debug logs at debug level.
@@ -150,20 +147,25 @@ func (l *SimpleLogger) Err(format string, a ...interface{}) {
 
 // Log writes the log at level.
 func (l *SimpleLogger) Log(level LogLevel, format string, a ...interface{}) {
-	levelStr := l.levelToString(level)
-	msg := l.capitalizeFirstLetter(fmt.Sprintf(format, a...))
+	if l != nil {
+		levelStr := l.levelToString(level)
+		msg := l.capitalizeFirstLetter(fmt.Sprintf(format, a...))
 
-	// Only log this message if configured to log at this level.
-	if l.Level <= level {
-		// Calling .Output instead of Printf so we can change the calldepth
-		// param to 3. The default is 2 which would identify the log as coming
-		// from this file and line every time instead of our caller's.
-		l.Logger.Output(3, fmt.Sprintf("[%s] %s: %s\n", levelStr, l.Source, msg)) // nolint: errcheck
-	}
+		// Only log this message if configured to log at this level.
+		if l.Level <= level {
+			datetime := time.Now().Format("2006/01/02 15:04:05-0700")
+			var caller string
+			if l.Level <= Debug {
+				file, line := l.callSite(3)
+				caller = fmt.Sprintf(" %s:%d", file, line)
+			}
+			l.Logger.Printf("%s [%s]%s %s: %s\n", datetime, levelStr, caller, l.Source, msg) // noline: errcheck
+		}
 
-	// Keep history at all log levels.
-	if l.KeepHistory {
-		l.saveToHistory(levelStr, msg)
+		// Keep history at all log levels.
+		if l.KeepHistory {
+			l.saveToHistory(levelStr, msg)
+		}
 	}
 }
 
@@ -187,16 +189,39 @@ func (l *SimpleLogger) capitalizeFirstLetter(s string) string {
 	return string(runes)
 }
 
+// levelToString returns the logging level as a 4 character string. DEBUG and ERROR are shortened intentionally
+// so that logs line up.
 func (l *SimpleLogger) levelToString(level LogLevel) string {
 	switch level {
 	case Debug:
-		return "DEBUG"
+		return "DBUG"
 	case Info:
 		return "INFO"
 	case Warn:
 		return "WARN"
 	case Error:
-		return "ERROR"
+		return "EROR"
 	}
-	return "NOLEVEL"
+	return "????"
+}
+
+// callSite returns the location of the caller of this function via its
+// filename and line number. skip is the number of stack frames to skip.
+func (l *SimpleLogger) callSite(skip int) (string, int) {
+	_, file, line, ok := runtime.Caller(skip)
+	if !ok {
+		return "???", 0
+	}
+
+	// file is the full filepath but we just want the filename.
+	// NOTE: rather than calling path.Base we're using code from the stdlib
+	// logging package which I assume is optimized.
+	short := file
+	for i := len(file) - 1; i > 0; i-- {
+		if file[i] == '/' {
+			short = file[i+1:]
+			break
+		}
+	}
+	return short, line
 }

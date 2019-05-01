@@ -19,13 +19,13 @@ import (
 	"path"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
 	"github.com/google/go-github/github"
-	"github.com/lkysow/go-gitlab"
+	gitlab "github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
-	"gopkg.in/go-playground/validator.v9"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	validator "gopkg.in/go-playground/validator.v9"
 )
 
 const gitlabPullOpened = "opened"
@@ -34,7 +34,7 @@ const usagesCols = 90
 // PullCommand is a command to run on a pull request.
 type PullCommand interface {
 	// CommandName is the name of the command we're running.
-	CommandName() CommandName
+	CommandName() models.CommandName
 	// IsVerbose is true if the output of this command should be verbose.
 	IsVerbose() bool
 	// IsAutoplan is true if this is an autoplan command vs. a comment command.
@@ -46,8 +46,8 @@ type PullCommand interface {
 type AutoplanCommand struct{}
 
 // CommandName is Plan.
-func (c AutoplanCommand) CommandName() CommandName {
-	return PlanCommand
+func (c AutoplanCommand) CommandName() models.CommandName {
+	return models.PlanCommand
 }
 
 // IsVerbose is false for autoplan commands.
@@ -69,7 +69,7 @@ type CommentCommand struct {
 	// ex. atlantis plan -- -target=resource
 	Flags []string
 	// Name is the name of the command the comment specified.
-	Name CommandName
+	Name models.CommandName
 	// Verbose is true if the command should output verbosely.
 	Verbose bool
 	// Workspace is the name of the Terraform workspace to run the command in.
@@ -89,7 +89,7 @@ func (c CommentCommand) IsForSpecificProject() bool {
 }
 
 // CommandName returns the name of this command.
-func (c CommentCommand) CommandName() CommandName {
+func (c CommentCommand) CommandName() models.CommandName {
 	return c.Name
 }
 
@@ -109,7 +109,7 @@ func (c CommentCommand) String() string {
 }
 
 // NewCommentCommand constructs a CommentCommand, setting all missing fields to defaults.
-func NewCommentCommand(repoRelDir string, flags []string, name CommandName, verbose bool, workspace string, project string) *CommentCommand {
+func NewCommentCommand(repoRelDir string, flags []string, name models.CommandName, verbose bool, workspace string, project string) *CommentCommand {
 	// If repoRelDir was empty we want to keep it that way to indicate that it
 	// wasn't specified in the comment.
 	if repoRelDir != "" {
@@ -318,13 +318,14 @@ func (e *EventParser) parseCommonBitbucketCloudEventData(event bitbucketcloud.Co
 		Num:        *event.PullRequest.ID,
 		HeadCommit: *event.PullRequest.Source.Commit.Hash,
 		URL:        *event.PullRequest.Links.HTML.HREF,
-		Branch:     *event.PullRequest.Source.Branch.Name,
-		Author:     *event.Actor.Username,
+		HeadBranch: *event.PullRequest.Source.Branch.Name,
+		BaseBranch: *event.PullRequest.Destination.Branch.Name,
+		Author:     *event.Actor.Nickname,
 		State:      prState,
 		BaseRepo:   baseRepo,
 	}
 	user = models.User{
-		Username: *event.Actor.Username,
+		Username: *event.Actor.Nickname,
 	}
 	return
 }
@@ -417,11 +418,17 @@ func (e *EventParser) ParseGithubPull(pull *github.PullRequest) (pullModel model
 		err = errors.New("html_url is null")
 		return
 	}
-	branch := pull.Head.GetRef()
-	if branch == "" {
+	headBranch := pull.Head.GetRef()
+	if headBranch == "" {
 		err = errors.New("head.ref is null")
 		return
 	}
+	baseBranch := pull.Base.GetRef()
+	if baseBranch == "" {
+		err = errors.New("base.ref is null")
+		return
+	}
+
 	authorUsername := pull.User.GetLogin()
 	if authorUsername == "" {
 		err = errors.New("user.login is null")
@@ -449,12 +456,13 @@ func (e *EventParser) ParseGithubPull(pull *github.PullRequest) (pullModel model
 
 	pullModel = models.PullRequest{
 		Author:     authorUsername,
-		Branch:     branch,
+		HeadBranch: headBranch,
 		HeadCommit: commit,
 		URL:        url,
 		Num:        num,
 		State:      pullState,
 		BaseRepo:   baseRepo,
+		BaseBranch: baseBranch,
 	}
 	return
 }
@@ -491,7 +499,8 @@ func (e *EventParser) ParseGitlabMergeRequestEvent(event gitlab.MergeEvent) (pul
 		Author:     event.User.Username,
 		Num:        event.ObjectAttributes.IID,
 		HeadCommit: event.ObjectAttributes.LastCommit.ID,
-		Branch:     event.ObjectAttributes.SourceBranch,
+		HeadBranch: event.ObjectAttributes.SourceBranch,
+		BaseBranch: event.ObjectAttributes.TargetBranch,
 		State:      modelState,
 		BaseRepo:   baseRepo,
 	}
@@ -553,7 +562,8 @@ func (e *EventParser) ParseGitlabMergeRequest(mr *gitlab.MergeRequest, baseRepo 
 		Author:     mr.Author.Username,
 		Num:        mr.IID,
 		HeadCommit: mr.SHA,
-		Branch:     mr.SourceBranch,
+		HeadBranch: mr.SourceBranch,
+		BaseBranch: mr.TargetBranch,
 		State:      pullState,
 		BaseRepo:   baseRepo,
 	}
@@ -565,7 +575,7 @@ func (e *EventParser) GetBitbucketServerPullEventType(eventTypeHeader string) mo
 	switch eventTypeHeader {
 	case bitbucketserver.PullCreatedHeader:
 		return models.OpenedPullEvent
-	case bitbucketserver.PullMergedHeader, bitbucketserver.PullDeclinedHeader:
+	case bitbucketserver.PullMergedHeader, bitbucketserver.PullDeclinedHeader, bitbucketserver.PullDeletedHeader:
 		return models.ClosedPullEvent
 	}
 	return models.OtherPullEvent
@@ -633,7 +643,8 @@ func (e *EventParser) parseCommonBitbucketServerEventData(event bitbucketserver.
 		Num:        *event.PullRequest.ID,
 		HeadCommit: *event.PullRequest.FromRef.LatestCommit,
 		URL:        fmt.Sprintf("%s/projects/%s/repos/%s/pull-requests/%d", e.BitbucketServerURL, *event.PullRequest.ToRef.Repository.Project.Key, *event.PullRequest.ToRef.Repository.Slug, *event.PullRequest.ID),
-		Branch:     *event.PullRequest.FromRef.DisplayID,
+		HeadBranch: *event.PullRequest.FromRef.DisplayID,
+		BaseBranch: *event.PullRequest.ToRef.DisplayID,
 		Author:     *event.Actor.Username,
 		State:      prState,
 		BaseRepo:   baseRepo,

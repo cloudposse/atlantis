@@ -15,190 +15,110 @@ package events_test
 
 import (
 	"os"
-	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/mocks"
-	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
-	"github.com/cloudposse/atlantis/server/events/models"
-	mocks2 "github.com/cloudposse/atlantis/server/events/runtime/mocks"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/mocks"
+	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
+	"github.com/runatlantis/atlantis/server/events/models"
+	mocks2 "github.com/runatlantis/atlantis/server/events/runtime/mocks"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
+// Test that it runs the expected plan steps.
 func TestDefaultProjectCommandRunner_Plan(t *testing.T) {
-	cases := []struct {
-		description string
-		projCfg     *valid.Project
-		globalCfg   *valid.Config
-		expSteps    []string
-		expOut      string
-	}{
-		{
-			description: "use defaults",
-			projCfg:     nil,
-			globalCfg:   nil,
-			expSteps:    []string{"init", "plan"},
-			expOut:      "init\nplan",
-		},
-		{
-			description: "no workflow, use defaults",
-			projCfg: &valid.Project{
-				Dir: ".",
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
-				},
-			},
-			expSteps: []string{"init", "plan"},
-			expOut:   "init\nplan",
-		},
-		{
-			description: "workflow without plan stage set",
-			projCfg: &valid.Project{
-				Dir:      ".",
-				Workflow: String("myworkflow"),
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
-				},
-				Workflows: map[string]valid.Workflow{
-					"myworkflow": {
-						Apply: &valid.Stage{
-							Steps: nil,
-						},
-					},
-				},
-			},
-			expSteps: []string{"init", "plan"},
-			expOut:   "init\nplan",
-		},
-		{
-			description: "workflow with custom plan stage",
-			projCfg: &valid.Project{
-				Dir:      ".",
-				Workflow: String("myworkflow"),
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
-				},
-				Workflows: map[string]valid.Workflow{
-					"myworkflow": {
-						Plan: &valid.Stage{
-							Steps: []valid.Step{
-								{
-									StepName: "run",
-								},
-								{
-									StepName: "apply",
-								},
-								{
-									StepName: "plan",
-								},
-								{
-									StepName: "init",
-								},
-							},
-						},
-					},
-				},
-			},
-			expSteps: []string{"run", "apply", "plan", "init"},
-			expOut:   "run\napply\nplan\ninit",
-		},
+	RegisterMockTestingT(t)
+	mockInit := mocks.NewMockStepRunner()
+	mockPlan := mocks.NewMockStepRunner()
+	mockApply := mocks.NewMockStepRunner()
+	mockRun := mocks.NewMockCustomStepRunner()
+	mockWorkingDir := mocks.NewMockWorkingDir()
+	mockLocker := mocks.NewMockProjectLocker()
+
+	runner := events.DefaultProjectCommandRunner{
+		Locker:              mockLocker,
+		LockURLGenerator:    mockURLGenerator{},
+		InitStepRunner:      mockInit,
+		PlanStepRunner:      mockPlan,
+		ApplyStepRunner:     mockApply,
+		RunStepRunner:       mockRun,
+		PullApprovedChecker: nil,
+		WorkingDir:          mockWorkingDir,
+		Webhooks:            nil,
+		WorkingDirLocker:    events.NewDefaultWorkingDirLocker(),
 	}
 
-	for _, c := range cases {
-		t.Run(strings.Join(c.expSteps, ","), func(t *testing.T) {
-			RegisterMockTestingT(t)
-			mockInit := mocks.NewMockStepRunner()
-			mockPlan := mocks.NewMockStepRunner()
-			mockApply := mocks.NewMockStepRunner()
-			mockRun := mocks.NewMockStepRunner()
-			mockWorkingDir := mocks.NewMockWorkingDir()
-			mockLocker := mocks.NewMockProjectLocker()
+	repoDir, cleanup := TempDir(t)
+	defer cleanup()
+	When(mockWorkingDir.Clone(
+		matchers.AnyPtrToLoggingSimpleLogger(),
+		matchers.AnyModelsRepo(),
+		matchers.AnyModelsRepo(),
+		matchers.AnyModelsPullRequest(),
+		AnyString(),
+	)).ThenReturn(repoDir, nil)
+	When(mockLocker.TryLock(
+		matchers.AnyPtrToLoggingSimpleLogger(),
+		matchers.AnyModelsPullRequest(),
+		matchers.AnyModelsUser(),
+		AnyString(),
+		matchers.AnyModelsProject(),
+	)).ThenReturn(&events.TryLockResponse{
+		LockAcquired: true,
+		LockKey:      "lock-key",
+	}, nil)
 
-			runner := events.DefaultProjectCommandRunner{
-				Locker:              mockLocker,
-				LockURLGenerator:    mockURLGenerator{},
-				InitStepRunner:      mockInit,
-				PlanStepRunner:      mockPlan,
-				ApplyStepRunner:     mockApply,
-				RunStepRunner:       mockRun,
-				PullApprovedChecker: nil,
-				WorkingDir:          mockWorkingDir,
-				Webhooks:            nil,
-				WorkingDirLocker:    events.NewDefaultWorkingDirLocker(),
-			}
+	ctx := models.ProjectCommandContext{
+		Log: logging.NewNoopLogger(),
+		Steps: []valid.Step{
+			{
+				StepName: "run",
+			},
+			{
+				StepName: "apply",
+			},
+			{
+				StepName: "plan",
+			},
+			{
+				StepName: "init",
+			},
+		},
+		Workspace:  "default",
+		RepoRelDir: ".",
+	}
+	// Each step will output its step name.
+	When(mockInit.Run(ctx, nil, repoDir)).ThenReturn("init", nil)
+	When(mockPlan.Run(ctx, nil, repoDir)).ThenReturn("plan", nil)
+	When(mockApply.Run(ctx, nil, repoDir)).ThenReturn("apply", nil)
+	When(mockRun.Run(ctx, "", repoDir)).ThenReturn("run", nil)
 
-			repoDir := "/tmp/mydir"
-			When(mockWorkingDir.Clone(
-				matchers.AnyPtrToLoggingSimpleLogger(),
-				matchers.AnyModelsRepo(),
-				matchers.AnyModelsRepo(),
-				matchers.AnyModelsPullRequest(),
-				AnyString(),
-			)).ThenReturn(repoDir, nil)
-			When(mockLocker.TryLock(
-				matchers.AnyPtrToLoggingSimpleLogger(),
-				matchers.AnyModelsPullRequest(),
-				matchers.AnyModelsUser(),
-				AnyString(),
-				matchers.AnyModelsProject(),
-			)).ThenReturn(&events.TryLockResponse{
-				LockAcquired: true,
-				LockKey:      "lock-key",
-			}, nil)
+	res := runner.Plan(ctx)
 
-			ctx := models.ProjectCommandContext{
-				Log:           logging.NewNoopLogger(),
-				ProjectConfig: c.projCfg,
-				Workspace:     "default",
-				GlobalConfig:  c.globalCfg,
-				RepoRelDir:    ".",
-			}
-			When(mockInit.Run(ctx, nil, repoDir)).ThenReturn("init", nil)
-			When(mockPlan.Run(ctx, nil, repoDir)).ThenReturn("plan", nil)
-			When(mockApply.Run(ctx, nil, repoDir)).ThenReturn("apply", nil)
-			When(mockRun.Run(ctx, nil, repoDir)).ThenReturn("run", nil)
+	Assert(t, res.PlanSuccess != nil, "exp plan success")
+	Equals(t, "https://lock-key", res.PlanSuccess.LockURL)
+	Equals(t, "run\napply\nplan\ninit", res.PlanSuccess.TerraformOutput)
 
-			res := runner.Plan(ctx)
-
-			Assert(t, res.PlanSuccess != nil, "exp plan success")
-			Equals(t, "https://lock-key", res.PlanSuccess.LockURL)
-			Equals(t, c.expOut, res.PlanSuccess.TerraformOutput)
-
-			for _, step := range c.expSteps {
-				switch step {
-				case "init":
-					mockInit.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
-				case "plan":
-					mockPlan.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
-				case "apply":
-					mockApply.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
-				case "run":
-					mockRun.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
-				}
-			}
-		})
+	expSteps := []string{"run", "apply", "plan", "init"}
+	for _, step := range expSteps {
+		switch step {
+		case "init":
+			mockInit.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
+		case "plan":
+			mockPlan.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
+		case "apply":
+			mockApply.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
+		case "run":
+			mockRun.VerifyWasCalledOnce().Run(ctx, "", repoDir)
+		}
 	}
 }
 
+// Test what happens if there's no working dir. This signals that the project
+// was never planned.
 func TestDefaultProjectCommandRunner_ApplyNotCloned(t *testing.T) {
 	mockWorkingDir := mocks.NewMockWorkingDir()
 	runner := &events.DefaultProjectCommandRunner{
@@ -211,129 +131,112 @@ func TestDefaultProjectCommandRunner_ApplyNotCloned(t *testing.T) {
 	ErrEquals(t, "project has not been cloned–did you run plan?", res.Error)
 }
 
+// Test that if approval is required and the PR isn't approved we give an error.
 func TestDefaultProjectCommandRunner_ApplyNotApproved(t *testing.T) {
 	RegisterMockTestingT(t)
 	mockWorkingDir := mocks.NewMockWorkingDir()
 	mockApproved := mocks2.NewMockPullApprovedChecker()
 	runner := &events.DefaultProjectCommandRunner{
-		WorkingDir:              mockWorkingDir,
-		PullApprovedChecker:     mockApproved,
-		WorkingDirLocker:        events.NewDefaultWorkingDirLocker(),
-		RequireApprovalOverride: true,
+		WorkingDir:          mockWorkingDir,
+		PullApprovedChecker: mockApproved,
+		WorkingDirLocker:    events.NewDefaultWorkingDirLocker(),
 	}
-	ctx := models.ProjectCommandContext{}
-	When(mockWorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)).ThenReturn("/tmp/mydir", nil)
+	ctx := models.ProjectCommandContext{
+		ApplyRequirements: []string{"approved"},
+	}
+	tmp, cleanup := TempDir(t)
+	defer cleanup()
+	When(mockWorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)).ThenReturn(tmp, nil)
 	When(mockApproved.PullIsApproved(ctx.BaseRepo, ctx.Pull)).ThenReturn(false, nil)
 
 	res := runner.Apply(ctx)
 	Equals(t, "Pull request must be approved before running apply.", res.Failure)
 }
 
+// Test that if mergeable is required and the PR isn't mergeable we give an error.
+func TestDefaultProjectCommandRunner_ApplyNotMergeable(t *testing.T) {
+	RegisterMockTestingT(t)
+	mockWorkingDir := mocks.NewMockWorkingDir()
+	runner := &events.DefaultProjectCommandRunner{
+		WorkingDir:       mockWorkingDir,
+		WorkingDirLocker: events.NewDefaultWorkingDirLocker(),
+	}
+	ctx := models.ProjectCommandContext{
+		PullMergeable:     false,
+		ApplyRequirements: []string{"mergeable"},
+	}
+	tmp, cleanup := TempDir(t)
+	defer cleanup()
+	When(mockWorkingDir.GetWorkingDir(ctx.BaseRepo, ctx.Pull, ctx.Workspace)).ThenReturn(tmp, nil)
+
+	res := runner.Apply(ctx)
+	Equals(t, "Pull request must be mergeable before running apply.", res.Failure)
+}
+
+// Test that it runs the expected apply steps.
 func TestDefaultProjectCommandRunner_Apply(t *testing.T) {
 	cases := []struct {
 		description string
-		projCfg     *valid.Project
-		globalCfg   *valid.Config
-		expSteps    []string
-		expOut      string
+		steps       []valid.Step
+		applyReqs   []string
+
+		expSteps      []string
+		expOut        string
+		expFailure    string
+		pullMergeable bool
 	}{
 		{
-			description: "use defaults",
-			projCfg:     nil,
-			globalCfg:   nil,
+			description: "normal workflow",
+			steps:       valid.DefaultApplyStage.Steps,
 			expSteps:    []string{"apply"},
 			expOut:      "apply",
 		},
 		{
-			description: "no workflow, use defaults",
-			projCfg: &valid.Project{
-				Dir: ".",
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
-				},
-			},
-			expSteps: []string{"apply"},
-			expOut:   "apply",
+			description: "approval required",
+			steps:       valid.DefaultApplyStage.Steps,
+			applyReqs:   []string{"approved"},
+			expSteps:    []string{"approve", "apply"},
+			expOut:      "apply",
 		},
 		{
-			description: "no workflow, approval required, use defaults",
-			projCfg: &valid.Project{
-				Dir:               ".",
-				ApplyRequirements: []string{"approved"},
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir:               ".",
-						ApplyRequirements: []string{"approved"},
-					},
-				},
-			},
-			expSteps: []string{"approved", "apply"},
-			expOut:   "apply",
+			description:   "mergeable required",
+			steps:         valid.DefaultApplyStage.Steps,
+			pullMergeable: true,
+			applyReqs:     []string{"mergeable"},
+			expSteps:      []string{"apply"},
+			expOut:        "apply",
 		},
 		{
-			description: "workflow without apply stage set",
-			projCfg: &valid.Project{
-				Dir:      ".",
-				Workflow: String("myworkflow"),
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
-				},
-				Workflows: map[string]valid.Workflow{
-					"myworkflow": {
-						Plan: &valid.Stage{
-							Steps: nil,
-						},
-					},
-				},
-			},
-			expSteps: []string{"apply"},
-			expOut:   "apply",
+			description:   "mergeable required, pull not mergeable",
+			steps:         valid.DefaultApplyStage.Steps,
+			pullMergeable: false,
+			applyReqs:     []string{"mergeable"},
+			expSteps:      []string{""},
+			expOut:        "",
+			expFailure:    "Pull request must be mergeable before running apply.",
+		},
+		{
+			description:   "mergeable and approved required",
+			steps:         valid.DefaultApplyStage.Steps,
+			pullMergeable: true,
+			applyReqs:     []string{"mergeable", "approved"},
+			expSteps:      []string{"approved", "apply"},
+			expOut:        "apply",
 		},
 		{
 			description: "workflow with custom apply stage",
-			projCfg: &valid.Project{
-				Dir:      ".",
-				Workflow: String("myworkflow"),
-			},
-			globalCfg: &valid.Config{
-				Version: 2,
-				Projects: []valid.Project{
-					{
-						Dir: ".",
-					},
+			steps: []valid.Step{
+				{
+					StepName: "run",
 				},
-				Workflows: map[string]valid.Workflow{
-					"myworkflow": {
-						Apply: &valid.Stage{
-							Steps: []valid.Step{
-								{
-									StepName: "run",
-								},
-								{
-									StepName: "apply",
-								},
-								{
-									StepName: "plan",
-								},
-								{
-									StepName: "init",
-								},
-							},
-						},
-					},
+				{
+					StepName: "apply",
+				},
+				{
+					StepName: "plan",
+				},
+				{
+					StepName: "init",
 				},
 			},
 			expSteps: []string{"run", "apply", "plan", "init"},
@@ -342,12 +245,12 @@ func TestDefaultProjectCommandRunner_Apply(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Run(strings.Join(c.expSteps, ","), func(t *testing.T) {
+		t.Run(c.description, func(t *testing.T) {
 			RegisterMockTestingT(t)
 			mockInit := mocks.NewMockStepRunner()
 			mockPlan := mocks.NewMockStepRunner()
 			mockApply := mocks.NewMockStepRunner()
-			mockRun := mocks.NewMockStepRunner()
+			mockRun := mocks.NewMockCustomStepRunner()
 			mockApproved := mocks2.NewMockPullApprovedChecker()
 			mockWorkingDir := mocks.NewMockWorkingDir()
 			mockLocker := mocks.NewMockProjectLocker()
@@ -365,8 +268,8 @@ func TestDefaultProjectCommandRunner_Apply(t *testing.T) {
 				Webhooks:            mockSender,
 				WorkingDirLocker:    events.NewDefaultWorkingDirLocker(),
 			}
-
-			repoDir := "/tmp/mydir"
+			repoDir, cleanup := TempDir(t)
+			defer cleanup()
 			When(mockWorkingDir.GetWorkingDir(
 				matchers.AnyModelsRepo(),
 				matchers.AnyModelsPullRequest(),
@@ -374,20 +277,22 @@ func TestDefaultProjectCommandRunner_Apply(t *testing.T) {
 			)).ThenReturn(repoDir, nil)
 
 			ctx := models.ProjectCommandContext{
-				Log:           logging.NewNoopLogger(),
-				ProjectConfig: c.projCfg,
-				Workspace:     "default",
-				GlobalConfig:  c.globalCfg,
-				RepoRelDir:    ".",
+				Log:               logging.NewNoopLogger(),
+				Steps:             c.steps,
+				Workspace:         "default",
+				ApplyRequirements: c.applyReqs,
+				RepoRelDir:        ".",
+				PullMergeable:     c.pullMergeable,
 			}
 			When(mockInit.Run(ctx, nil, repoDir)).ThenReturn("init", nil)
 			When(mockPlan.Run(ctx, nil, repoDir)).ThenReturn("plan", nil)
 			When(mockApply.Run(ctx, nil, repoDir)).ThenReturn("apply", nil)
-			When(mockRun.Run(ctx, nil, repoDir)).ThenReturn("run", nil)
+			When(mockRun.Run(ctx, "", repoDir)).ThenReturn("run", nil)
 			When(mockApproved.PullIsApproved(ctx.BaseRepo, ctx.Pull)).ThenReturn(true, nil)
 
 			res := runner.Apply(ctx)
 			Equals(t, c.expOut, res.ApplySuccess)
+			Equals(t, c.expFailure, res.Failure)
 
 			for _, step := range c.expSteps {
 				switch step {
@@ -400,7 +305,7 @@ func TestDefaultProjectCommandRunner_Apply(t *testing.T) {
 				case "apply":
 					mockApply.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
 				case "run":
-					mockRun.VerifyWasCalledOnce().Run(ctx, nil, repoDir)
+					mockRun.VerifyWasCalledOnce().Run(ctx, "", repoDir)
 				}
 			}
 		})

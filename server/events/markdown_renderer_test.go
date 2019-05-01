@@ -19,28 +19,28 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRenderErr(t *testing.T) {
 	err := errors.New("err")
 	cases := []struct {
 		Description string
-		Command     events.CommandName
+		Command     models.CommandName
 		Error       error
 		Expected    string
 	}{
 		{
 			"apply error",
-			events.ApplyCommand,
+			models.ApplyCommand,
 			err,
 			"**Apply Error**\n```\nerr\n```\n",
 		},
 		{
 			"plan error",
-			events.PlanCommand,
+			models.PlanCommand,
 			err,
 			"**Plan Error**\n```\nerr\n```\n",
 		},
@@ -48,39 +48,38 @@ func TestRenderErr(t *testing.T) {
 
 	r := events.MarkdownRenderer{}
 	for _, c := range cases {
-		t.Run(c.Description, func(t *testing.T) {
-			res := events.CommandResult{
-				Error: c.Error,
-			}
-			for _, verbose := range []bool{true, false} {
-				t.Log("testing " + c.Description)
+		res := events.CommandResult{
+			Error: c.Error,
+		}
+		for _, verbose := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s_%t", c.Description, verbose), func(t *testing.T) {
 				s := r.Render(res, c.Command, "log", verbose, models.Github)
 				if !verbose {
 					Equals(t, c.Expected, s)
 				} else {
 					Equals(t, c.Expected+"<details><summary>Log</summary>\n  <p>\n\n```\nlog```\n</p></details>\n", s)
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
 func TestRenderFailure(t *testing.T) {
 	cases := []struct {
 		Description string
-		Command     events.CommandName
+		Command     models.CommandName
 		Failure     string
 		Expected    string
 	}{
 		{
 			"apply failure",
-			events.ApplyCommand,
+			models.ApplyCommand,
 			"failure",
 			"**Apply Failed**: failure\n",
 		},
 		{
 			"plan failure",
-			events.PlanCommand,
+			models.PlanCommand,
 			"failure",
 			"**Plan Failed**: failure\n",
 		},
@@ -88,55 +87,53 @@ func TestRenderFailure(t *testing.T) {
 
 	r := events.MarkdownRenderer{}
 	for _, c := range cases {
-		t.Run(c.Description, func(t *testing.T) {
-			res := events.CommandResult{
-				Failure: c.Failure,
-			}
-			for _, verbose := range []bool{true, false} {
-				t.Log("testing " + c.Description)
+		res := events.CommandResult{
+			Failure: c.Failure,
+		}
+		for _, verbose := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s_%t", c.Description, verbose), func(t *testing.T) {
 				s := r.Render(res, c.Command, "log", verbose, models.Github)
 				if !verbose {
 					Equals(t, c.Expected, s)
 				} else {
 					Equals(t, c.Expected+"<details><summary>Log</summary>\n  <p>\n\n```\nlog```\n</p></details>\n", s)
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
 func TestRenderErrAndFailure(t *testing.T) {
-	t.Log("if there is an error and a failure, the error should be printed")
 	r := events.MarkdownRenderer{}
 	res := events.CommandResult{
 		Error:   errors.New("error"),
 		Failure: "failure",
 	}
-	s := r.Render(res, events.PlanCommand, "", false, models.Github)
+	s := r.Render(res, models.PlanCommand, "", false, models.Github)
 	Equals(t, "**Plan Error**\n```\nerror\n```\n", s)
 }
 
 func TestRenderProjectResults(t *testing.T) {
 	cases := []struct {
 		Description    string
-		Command        events.CommandName
-		ProjectResults []events.ProjectResult
+		Command        models.CommandName
+		ProjectResults []models.ProjectResult
 		VCSHost        models.VCSHostType
 		Expected       string
 	}{
 		{
 			"no projects",
-			events.PlanCommand,
-			[]events.ProjectResult{},
+			models.PlanCommand,
+			[]models.ProjectResult{},
 			models.Github,
 			"Ran Plan for 0 projects:\n\n\n",
 		},
 		{
 			"single successful plan",
-			events.PlanCommand,
-			[]events.ProjectResult{
+			models.PlanCommand,
+			[]models.ProjectResult{
 				{
-					PlanSuccess: &events.PlanSuccess{
+					PlanSuccess: &models.PlanSuccess{
 						TerraformOutput: "terraform-output",
 						LockURL:         "lock-url",
 						RePlanCmd:       "atlantis plan -d path -w workspace",
@@ -147,7 +144,41 @@ func TestRenderProjectResults(t *testing.T) {
 				},
 			},
 			models.Github,
-			`Ran Plan in dir: $path$ workspace: $workspace$
+			`Ran Plan for dir: $path$ workspace: $workspace$
+
+$$$diff
+terraform-output
+$$$
+
+* :arrow_forward: To **apply** this plan, comment:
+    * $atlantis apply -d path -w workspace$
+* :put_litter_in_its_place: To **delete** this plan click [here](lock-url)
+* :repeat: To **plan** this project again, comment:
+    * $atlantis plan -d path -w workspace$
+
+---
+* :fast_forward: To **apply** all unapplied plans from this pull request, comment:
+    * $atlantis apply$
+`,
+		},
+		{
+			"single successful plan with project name",
+			models.PlanCommand,
+			[]models.ProjectResult{
+				{
+					PlanSuccess: &models.PlanSuccess{
+						TerraformOutput: "terraform-output",
+						LockURL:         "lock-url",
+						RePlanCmd:       "atlantis plan -d path -w workspace",
+						ApplyCmd:        "atlantis apply -d path -w workspace",
+					},
+					Workspace:   "workspace",
+					RepoRelDir:  "path",
+					ProjectName: "projectname",
+				},
+			},
+			models.Github,
+			`Ran Plan for project: $projectname$ dir: $path$ workspace: $workspace$
 
 $$$diff
 terraform-output
@@ -166,8 +197,8 @@ $$$
 		},
 		{
 			"single successful apply",
-			events.ApplyCommand,
-			[]events.ProjectResult{
+			models.ApplyCommand,
+			[]models.ProjectResult{
 				{
 					ApplySuccess: "success",
 					Workspace:    "workspace",
@@ -175,7 +206,27 @@ $$$
 				},
 			},
 			models.Github,
-			`Ran Apply in dir: $path$ workspace: $workspace$
+			`Ran Apply for dir: $path$ workspace: $workspace$
+
+$$$diff
+success
+$$$
+
+`,
+		},
+		{
+			"single successful apply with project name",
+			models.ApplyCommand,
+			[]models.ProjectResult{
+				{
+					ApplySuccess: "success",
+					Workspace:    "workspace",
+					RepoRelDir:   "path",
+					ProjectName:  "projectname",
+				},
+			},
+			models.Github,
+			`Ran Apply for project: $projectname$ dir: $path$ workspace: $workspace$
 
 $$$diff
 success
@@ -185,12 +236,12 @@ $$$
 		},
 		{
 			"multiple successful plans",
-			events.PlanCommand,
-			[]events.ProjectResult{
+			models.PlanCommand,
+			[]models.ProjectResult{
 				{
 					Workspace:  "workspace",
 					RepoRelDir: "path",
-					PlanSuccess: &events.PlanSuccess{
+					PlanSuccess: &models.PlanSuccess{
 						TerraformOutput: "terraform-output",
 						LockURL:         "lock-url",
 						ApplyCmd:        "atlantis apply -d path -w workspace",
@@ -198,9 +249,10 @@ $$$
 					},
 				},
 				{
-					Workspace:  "workspace",
-					RepoRelDir: "path2",
-					PlanSuccess: &events.PlanSuccess{
+					Workspace:   "workspace",
+					RepoRelDir:  "path2",
+					ProjectName: "projectname",
+					PlanSuccess: &models.PlanSuccess{
 						TerraformOutput: "terraform-output2",
 						LockURL:         "lock-url2",
 						ApplyCmd:        "atlantis apply -d path2 -w workspace",
@@ -210,10 +262,10 @@ $$$
 			},
 			models.Github,
 			`Ran Plan for 2 projects:
-1. workspace: $workspace$ dir: $path$
-1. workspace: $workspace$ dir: $path2$
+1. dir: $path$ workspace: $workspace$
+1. project: $projectname$ dir: $path2$ workspace: $workspace$
 
-### 1. workspace: $workspace$ dir: $path$
+### 1. dir: $path$ workspace: $workspace$
 $$$diff
 terraform-output
 $$$
@@ -225,7 +277,7 @@ $$$
     * $atlantis plan -d path -w workspace$
 
 ---
-### 2. workspace: $workspace$ dir: $path2$
+### 2. project: $projectname$ dir: $path2$ workspace: $workspace$
 $$$diff
 terraform-output2
 $$$
@@ -243,11 +295,12 @@ $$$
 		},
 		{
 			"multiple successful applies",
-			events.ApplyCommand,
-			[]events.ProjectResult{
+			models.ApplyCommand,
+			[]models.ProjectResult{
 				{
 					RepoRelDir:   "path",
 					Workspace:    "workspace",
+					ProjectName:  "projectname",
 					ApplySuccess: "success",
 				},
 				{
@@ -258,16 +311,16 @@ $$$
 			},
 			models.Github,
 			`Ran Apply for 2 projects:
-1. workspace: $workspace$ dir: $path$
-1. workspace: $workspace$ dir: $path2$
+1. project: $projectname$ dir: $path$ workspace: $workspace$
+1. dir: $path2$ workspace: $workspace$
 
-### 1. workspace: $workspace$ dir: $path$
+### 1. project: $projectname$ dir: $path$ workspace: $workspace$
 $$$diff
 success
 $$$
 
 ---
-### 2. workspace: $workspace$ dir: $path2$
+### 2. dir: $path2$ workspace: $workspace$
 $$$diff
 success2
 $$$
@@ -278,8 +331,8 @@ $$$
 		},
 		{
 			"single errored plan",
-			events.PlanCommand,
-			[]events.ProjectResult{
+			models.PlanCommand,
+			[]models.ProjectResult{
 				{
 					Error:      errors.New("error"),
 					RepoRelDir: "path",
@@ -287,7 +340,7 @@ $$$
 				},
 			},
 			models.Github,
-			`Ran Plan in dir: $path$ workspace: $workspace$
+			`Ran Plan for dir: $path$ workspace: $workspace$
 
 **Plan Error**
 $$$
@@ -298,8 +351,8 @@ $$$
 		},
 		{
 			"single failed plan",
-			events.PlanCommand,
-			[]events.ProjectResult{
+			models.PlanCommand,
+			[]models.ProjectResult{
 				{
 					RepoRelDir: "path",
 					Workspace:  "workspace",
@@ -307,7 +360,7 @@ $$$
 				},
 			},
 			models.Github,
-			`Ran Plan in dir: $path$ workspace: $workspace$
+			`Ran Plan for dir: $path$ workspace: $workspace$
 
 **Plan Failed**: failure
 
@@ -315,12 +368,12 @@ $$$
 		},
 		{
 			"successful, failed, and errored plan",
-			events.PlanCommand,
-			[]events.ProjectResult{
+			models.PlanCommand,
+			[]models.ProjectResult{
 				{
 					Workspace:  "workspace",
 					RepoRelDir: "path",
-					PlanSuccess: &events.PlanSuccess{
+					PlanSuccess: &models.PlanSuccess{
 						TerraformOutput: "terraform-output",
 						LockURL:         "lock-url",
 						ApplyCmd:        "atlantis apply -d path -w workspace",
@@ -333,18 +386,19 @@ $$$
 					Failure:    "failure",
 				},
 				{
-					Workspace:  "workspace",
-					RepoRelDir: "path3",
-					Error:      errors.New("error"),
+					Workspace:   "workspace",
+					RepoRelDir:  "path3",
+					ProjectName: "projectname",
+					Error:       errors.New("error"),
 				},
 			},
 			models.Github,
 			`Ran Plan for 3 projects:
-1. workspace: $workspace$ dir: $path$
-1. workspace: $workspace$ dir: $path2$
-1. workspace: $workspace$ dir: $path3$
+1. dir: $path$ workspace: $workspace$
+1. dir: $path2$ workspace: $workspace$
+1. project: $projectname$ dir: $path3$ workspace: $workspace$
 
-### 1. workspace: $workspace$ dir: $path$
+### 1. dir: $path$ workspace: $workspace$
 $$$diff
 terraform-output
 $$$
@@ -356,11 +410,11 @@ $$$
     * $atlantis plan -d path -w workspace$
 
 ---
-### 2. workspace: $workspace$ dir: $path2$
+### 2. dir: $path2$ workspace: $workspace$
 **Plan Failed**: failure
 
 ---
-### 3. workspace: $workspace$ dir: $path3$
+### 3. project: $projectname$ dir: $path3$ workspace: $workspace$
 **Plan Error**
 $$$
 error
@@ -373,8 +427,8 @@ $$$
 		},
 		{
 			"successful, failed, and errored apply",
-			events.ApplyCommand,
-			[]events.ProjectResult{
+			models.ApplyCommand,
+			[]models.ProjectResult{
 				{
 					Workspace:    "workspace",
 					RepoRelDir:   "path",
@@ -393,21 +447,21 @@ $$$
 			},
 			models.Github,
 			`Ran Apply for 3 projects:
-1. workspace: $workspace$ dir: $path$
-1. workspace: $workspace$ dir: $path2$
-1. workspace: $workspace$ dir: $path3$
+1. dir: $path$ workspace: $workspace$
+1. dir: $path2$ workspace: $workspace$
+1. dir: $path3$ workspace: $workspace$
 
-### 1. workspace: $workspace$ dir: $path$
+### 1. dir: $path$ workspace: $workspace$
 $$$diff
 success
 $$$
 
 ---
-### 2. workspace: $workspace$ dir: $path2$
+### 2. dir: $path2$ workspace: $workspace$
 **Apply Failed**: failure
 
 ---
-### 3. workspace: $workspace$ dir: $path3$
+### 3. dir: $path3$ workspace: $workspace$
 **Apply Error**
 $$$
 error
@@ -419,8 +473,8 @@ $$$
 		},
 		{
 			"successful, failed, and errored apply",
-			events.ApplyCommand,
-			[]events.ProjectResult{
+			models.ApplyCommand,
+			[]models.ProjectResult{
 				{
 					Workspace:    "workspace",
 					RepoRelDir:   "path",
@@ -439,21 +493,21 @@ $$$
 			},
 			models.Github,
 			`Ran Apply for 3 projects:
-1. workspace: $workspace$ dir: $path$
-1. workspace: $workspace$ dir: $path2$
-1. workspace: $workspace$ dir: $path3$
+1. dir: $path$ workspace: $workspace$
+1. dir: $path2$ workspace: $workspace$
+1. dir: $path3$ workspace: $workspace$
 
-### 1. workspace: $workspace$ dir: $path$
+### 1. dir: $path$ workspace: $workspace$
 $$$diff
 success
 $$$
 
 ---
-### 2. workspace: $workspace$ dir: $path2$
+### 2. dir: $path2$ workspace: $workspace$
 **Apply Failed**: failure
 
 ---
-### 3. workspace: $workspace$ dir: $path3$
+### 3. dir: $path3$ workspace: $workspace$
 **Apply Error**
 $$$
 error
@@ -486,170 +540,90 @@ $$$
 	}
 }
 
-// Test that we format the terraform plan output so it shows up properly
-// when using diff syntax highlighting.
-func TestRenderProjectResults_DiffSyntax(t *testing.T) {
-	r := events.MarkdownRenderer{}
-	result := r.Render(
-		events.CommandResult{
-			ProjectResults: []events.ProjectResult{
-				{
-					RepoRelDir: ".",
-					Workspace:  "default",
-					PlanSuccess: &events.PlanSuccess{
-						TerraformOutput: `Refreshing Terraform state in-memory prior to plan...
-The refreshed state will be used to calculate this plan, but will not be
-persisted to local or remote state storage.
-
-
-------------------------------------------------------------------------
-
-An execution plan has been generated and is shown below.
-Resource actions are indicated with the following symbols:
-  + create
-  ~ update in-place
-  - destroy
-
-Terraform will perform the following actions:
-
-+ null_resource.test[0]
-      id: <computed>
-
-  + null_resource.test[1]
-      id: <computed>
-
-  ~ aws_security_group_rule.allow_all
-      description: "" => "test3"
-
-  - aws_security_group_rule.allow_all
-`,
-						LockURL:   "lock-url",
-						RePlanCmd: "atlantis plan -d .",
-						ApplyCmd:  "atlantis apply -d .",
-					},
-				},
-			},
-		},
-		events.PlanCommand,
-		"log",
-		false,
-		models.Github,
-	)
-
-	exp := `Ran Plan in dir: $.$ workspace: $default$
-
-<details><summary>Show Output</summary>
-
-$$$diff
-Refreshing Terraform state in-memory prior to plan...
-The refreshed state will be used to calculate this plan, but will not be
-persisted to local or remote state storage.
-
-
-------------------------------------------------------------------------
-
-An execution plan has been generated and is shown below.
-Resource actions are indicated with the following symbols:
-+ create
-~ update in-place
-- destroy
-
-Terraform will perform the following actions:
-
-+ null_resource.test[0]
-      id: <computed>
-
-+ null_resource.test[1]
-      id: <computed>
-
-~ aws_security_group_rule.allow_all
-      description: "" => "test3"
-
-- aws_security_group_rule.allow_all
-
-$$$
-
-* :arrow_forward: To **apply** this plan, comment:
-    * $atlantis apply -d .$
-* :put_litter_in_its_place: To **delete** this plan click [here](lock-url)
-* :repeat: To **plan** this project again, comment:
-    * $atlantis plan -d .$
-</details>
-
----
-* :fast_forward: To **apply** all unapplied plans from this pull request, comment:
-    * $atlantis apply$
-`
-	expWithBackticks := strings.Replace(exp, "$", "`", -1)
-	Equals(t, expWithBackticks, result)
-}
-
 // Test that if the output is longer than 12 lines, it gets wrapped on the right
 // VCS hosts during an error.
 func TestRenderProjectResults_WrappedErr(t *testing.T) {
 	cases := []struct {
-		VCSHost    models.VCSHostType
-		Output     string
-		ShouldWrap bool
+		VCSHost                 models.VCSHostType
+		GitlabCommonMarkSupport bool
+		Output                  string
+		ShouldWrap              bool
 	}{
 		{
-			models.Github,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:    models.Github,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
 		},
 		{
-			models.Github,
-			strings.Repeat("line\n", 13),
-			true,
+			VCSHost:    models.Github,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: true,
 		},
 		{
-			models.Gitlab,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: false,
+			Output:                  strings.Repeat("line\n", 1),
+			ShouldWrap:              false,
 		},
 		{
-			models.Gitlab,
-			strings.Repeat("line\n", 13),
-			true,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: false,
+			Output:                  strings.Repeat("line\n", 13),
+			ShouldWrap:              false,
 		},
 		{
-			models.BitbucketCloud,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: true,
+			Output:                  strings.Repeat("line\n", 1),
+			ShouldWrap:              false,
 		},
 		{
-			models.BitbucketCloud,
-			strings.Repeat("line\n", 13),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: true,
+			Output:                  strings.Repeat("line\n", 13),
+			ShouldWrap:              true,
 		},
 		{
-			models.BitbucketServer,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:    models.BitbucketCloud,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
 		},
 		{
-			models.BitbucketServer,
-			strings.Repeat("line\n", 13),
-			false,
+			VCSHost:    models.BitbucketCloud,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: false,
+		},
+		{
+			VCSHost:    models.BitbucketServer,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
+		},
+		{
+			VCSHost:    models.BitbucketServer,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: false,
 		},
 	}
 
-	mr := events.MarkdownRenderer{}
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%s_%v", c.VCSHost.String(), c.ShouldWrap),
 			func(t *testing.T) {
+				mr := events.MarkdownRenderer{
+					GitlabSupportsCommonMark: c.GitlabCommonMarkSupport,
+				}
+
 				rendered := mr.Render(events.CommandResult{
-					ProjectResults: []events.ProjectResult{
+					ProjectResults: []models.ProjectResult{
 						{
 							RepoRelDir: ".",
 							Workspace:  "default",
 							Error:      errors.New(c.Output),
 						},
 					},
-				}, events.PlanCommand, "log", false, c.VCSHost)
+				}, models.PlanCommand, "log", false, c.VCSHost)
 				var exp string
 				if c.ShouldWrap {
-					exp = `Ran Plan in dir: $.$ workspace: $default$
+					exp = `Ran Plan for dir: $.$ workspace: $default$
 
 **Plan Error**
 <details><summary>Show Output</summary>
@@ -661,7 +635,7 @@ $$$
 
 `
 				} else {
-					exp = `Ran Plan in dir: $.$ workspace: $default$
+					exp = `Ran Plan for dir: $.$ workspace: $default$
 
 **Plan Error**
 $$$
@@ -681,87 +655,104 @@ $$$
 // VCS hosts for a single project.
 func TestRenderProjectResults_WrapSingleProject(t *testing.T) {
 	cases := []struct {
-		VCSHost    models.VCSHostType
-		Output     string
-		ShouldWrap bool
+		VCSHost                 models.VCSHostType
+		GitlabCommonMarkSupport bool
+		Output                  string
+		ShouldWrap              bool
 	}{
 		{
-			models.Github,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:    models.Github,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
 		},
 		{
-			models.Github,
-			strings.Repeat("line\n", 13),
-			true,
+			VCSHost:    models.Github,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: true,
 		},
 		{
-			models.Gitlab,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: false,
+			Output:                  strings.Repeat("line\n", 1),
+			ShouldWrap:              false,
 		},
 		{
-			models.Gitlab,
-			strings.Repeat("line\n", 13),
-			true,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: false,
+			Output:                  strings.Repeat("line\n", 13),
+			ShouldWrap:              false,
 		},
 		{
-			models.BitbucketCloud,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: true,
+			Output:                  strings.Repeat("line\n", 1),
+			ShouldWrap:              false,
 		},
 		{
-			models.BitbucketCloud,
-			strings.Repeat("line\n", 13),
-			false,
+			VCSHost:                 models.Gitlab,
+			GitlabCommonMarkSupport: true,
+			Output:                  strings.Repeat("line\n", 13),
+			ShouldWrap:              true,
 		},
 		{
-			models.BitbucketServer,
-			strings.Repeat("line\n", 1),
-			false,
+			VCSHost:    models.BitbucketCloud,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
 		},
 		{
-			models.BitbucketServer,
-			strings.Repeat("line\n", 13),
-			false,
+			VCSHost:    models.BitbucketCloud,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: false,
+		},
+		{
+			VCSHost:    models.BitbucketServer,
+			Output:     strings.Repeat("line\n", 1),
+			ShouldWrap: false,
+		},
+		{
+			VCSHost:    models.BitbucketServer,
+			Output:     strings.Repeat("line\n", 13),
+			ShouldWrap: false,
 		},
 	}
 
-	mr := events.MarkdownRenderer{}
 	for _, c := range cases {
-		for _, cmd := range []events.CommandName{events.PlanCommand, events.ApplyCommand} {
+		for _, cmd := range []models.CommandName{models.PlanCommand, models.ApplyCommand} {
 			t.Run(fmt.Sprintf("%s_%s_%v", c.VCSHost.String(), cmd.String(), c.ShouldWrap),
 				func(t *testing.T) {
-					var pr events.ProjectResult
+					mr := events.MarkdownRenderer{
+						GitlabSupportsCommonMark: c.GitlabCommonMarkSupport,
+					}
+					var pr models.ProjectResult
 					switch cmd {
-					case events.PlanCommand:
-						pr = events.ProjectResult{
+					case models.PlanCommand:
+						pr = models.ProjectResult{
 							RepoRelDir: ".",
 							Workspace:  "default",
-							PlanSuccess: &events.PlanSuccess{
+							PlanSuccess: &models.PlanSuccess{
 								TerraformOutput: c.Output,
 								LockURL:         "lock-url",
 								RePlanCmd:       "replancmd",
 								ApplyCmd:        "applycmd",
 							},
 						}
-					case events.ApplyCommand:
-						pr = events.ProjectResult{
+					case models.ApplyCommand:
+						pr = models.ProjectResult{
 							RepoRelDir:   ".",
 							Workspace:    "default",
 							ApplySuccess: c.Output,
 						}
 					}
 					rendered := mr.Render(events.CommandResult{
-						ProjectResults: []events.ProjectResult{pr},
+						ProjectResults: []models.ProjectResult{pr},
 					}, cmd, "log", false, c.VCSHost)
 
 					// Check result.
 					var exp string
 					switch cmd {
-					case events.PlanCommand:
+					case models.PlanCommand:
 						if c.ShouldWrap {
-							exp = `Ran Plan in dir: $.$ workspace: $default$
+							exp = `Ran Plan for dir: $.$ workspace: $default$
 
 <details><summary>Show Output</summary>
 
@@ -781,7 +772,7 @@ $$$
     * $atlantis apply$
 `
 						} else {
-							exp = `Ran Plan in dir: $.$ workspace: $default$
+							exp = `Ran Plan for dir: $.$ workspace: $default$
 
 $$$diff
 ` + c.Output + `
@@ -798,9 +789,9 @@ $$$
     * $atlantis apply$
 `
 						}
-					case events.ApplyCommand:
+					case models.ApplyCommand:
 						if c.ShouldWrap {
-							exp = `Ran Apply in dir: $.$ workspace: $default$
+							exp = `Ran Apply for dir: $.$ workspace: $default$
 
 <details><summary>Show Output</summary>
 
@@ -811,7 +802,7 @@ $$$
 
 `
 						} else {
-							exp = `Ran Apply in dir: $.$ workspace: $default$
+							exp = `Ran Apply for dir: $.$ workspace: $default$
 
 $$$diff
 ` + c.Output + `
@@ -832,7 +823,7 @@ func TestRenderProjectResults_MultiProjectApplyWrapped(t *testing.T) {
 	mr := events.MarkdownRenderer{}
 	tfOut := strings.Repeat("line\n", 13)
 	rendered := mr.Render(events.CommandResult{
-		ProjectResults: []events.ProjectResult{
+		ProjectResults: []models.ProjectResult{
 			{
 				RepoRelDir:   ".",
 				Workspace:    "staging",
@@ -844,12 +835,12 @@ func TestRenderProjectResults_MultiProjectApplyWrapped(t *testing.T) {
 				ApplySuccess: tfOut,
 			},
 		},
-	}, events.ApplyCommand, "log", false, models.Github)
+	}, models.ApplyCommand, "log", false, models.Github)
 	exp := `Ran Apply for 2 projects:
-1. workspace: $staging$ dir: $.$
-1. workspace: $production$ dir: $.$
+1. dir: $.$ workspace: $staging$
+1. dir: $.$ workspace: $production$
 
-### 1. workspace: $staging$ dir: $.$
+### 1. dir: $.$ workspace: $staging$
 <details><summary>Show Output</summary>
 
 $$$diff
@@ -858,7 +849,7 @@ $$$
 </details>
 
 ---
-### 2. workspace: $production$ dir: $.$
+### 2. dir: $.$ workspace: $production$
 <details><summary>Show Output</summary>
 
 $$$diff
@@ -877,11 +868,11 @@ func TestRenderProjectResults_MultiProjectPlanWrapped(t *testing.T) {
 	mr := events.MarkdownRenderer{}
 	tfOut := strings.Repeat("line\n", 13)
 	rendered := mr.Render(events.CommandResult{
-		ProjectResults: []events.ProjectResult{
+		ProjectResults: []models.ProjectResult{
 			{
 				RepoRelDir: ".",
 				Workspace:  "staging",
-				PlanSuccess: &events.PlanSuccess{
+				PlanSuccess: &models.PlanSuccess{
 					TerraformOutput: tfOut,
 					LockURL:         "staging-lock-url",
 					ApplyCmd:        "staging-apply-cmd",
@@ -891,7 +882,7 @@ func TestRenderProjectResults_MultiProjectPlanWrapped(t *testing.T) {
 			{
 				RepoRelDir: ".",
 				Workspace:  "production",
-				PlanSuccess: &events.PlanSuccess{
+				PlanSuccess: &models.PlanSuccess{
 					TerraformOutput: tfOut,
 					LockURL:         "production-lock-url",
 					ApplyCmd:        "production-apply-cmd",
@@ -899,12 +890,12 @@ func TestRenderProjectResults_MultiProjectPlanWrapped(t *testing.T) {
 				},
 			},
 		},
-	}, events.PlanCommand, "log", false, models.Github)
+	}, models.PlanCommand, "log", false, models.Github)
 	exp := `Ran Plan for 2 projects:
-1. workspace: $staging$ dir: $.$
-1. workspace: $production$ dir: $.$
+1. dir: $.$ workspace: $staging$
+1. dir: $.$ workspace: $production$
 
-### 1. workspace: $staging$ dir: $.$
+### 1. dir: $.$ workspace: $staging$
 <details><summary>Show Output</summary>
 
 $$$diff
@@ -919,7 +910,7 @@ $$$
 </details>
 
 ---
-### 2. workspace: $production$ dir: $.$
+### 2. dir: $.$ workspace: $production$
 <details><summary>Show Output</summary>
 
 $$$diff
@@ -939,4 +930,111 @@ $$$
 `
 	expWithBackticks := strings.Replace(exp, "$", "`", -1)
 	Equals(t, expWithBackticks, rendered)
+}
+
+// Test rendering when there was an error in one of the plans and we deleted
+// all the plans as a result.
+func TestRenderProjectResults_PlansDeleted(t *testing.T) {
+	cases := map[string]struct {
+		cr  events.CommandResult
+		exp string
+	}{
+		"one failure": {
+			cr: events.CommandResult{
+				ProjectResults: []models.ProjectResult{
+					{
+						RepoRelDir: ".",
+						Workspace:  "staging",
+						Failure:    "failure",
+					},
+				},
+				PlansDeleted: true,
+			},
+			exp: `Ran Plan for dir: $.$ workspace: $staging$
+
+**Plan Failed**: failure
+
+`,
+		},
+		"two failures": {
+			cr: events.CommandResult{
+				ProjectResults: []models.ProjectResult{
+					{
+						RepoRelDir: ".",
+						Workspace:  "staging",
+						Failure:    "failure",
+					},
+					{
+						RepoRelDir: ".",
+						Workspace:  "production",
+						Failure:    "failure",
+					},
+				},
+				PlansDeleted: true,
+			},
+			exp: `Ran Plan for 2 projects:
+1. dir: $.$ workspace: $staging$
+1. dir: $.$ workspace: $production$
+
+### 1. dir: $.$ workspace: $staging$
+**Plan Failed**: failure
+
+---
+### 2. dir: $.$ workspace: $production$
+**Plan Failed**: failure
+
+---
+
+`,
+		},
+		"one failure, one success": {
+			cr: events.CommandResult{
+				ProjectResults: []models.ProjectResult{
+					{
+						RepoRelDir: ".",
+						Workspace:  "staging",
+						Failure:    "failure",
+					},
+					{
+						RepoRelDir: ".",
+						Workspace:  "production",
+						PlanSuccess: &models.PlanSuccess{
+							TerraformOutput: "tf out",
+							LockURL:         "lock-url",
+							RePlanCmd:       "re-plan cmd",
+							ApplyCmd:        "apply cmd",
+						},
+					},
+				},
+				PlansDeleted: true,
+			},
+			exp: `Ran Plan for 2 projects:
+1. dir: $.$ workspace: $staging$
+1. dir: $.$ workspace: $production$
+
+### 1. dir: $.$ workspace: $staging$
+**Plan Failed**: failure
+
+---
+### 2. dir: $.$ workspace: $production$
+$$$diff
+tf out
+$$$
+
+This plan was not saved because one or more projects failed and automerge requires all plans pass.
+
+---
+
+`,
+		},
+	}
+
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			mr := events.MarkdownRenderer{}
+			rendered := mr.Render(c.cr, models.PlanCommand, "log", false, models.Github)
+			expWithBackticks := strings.Replace(c.exp, "$", "`", -1)
+			Equals(t, expWithBackticks, rendered)
+		})
+	}
 }

@@ -2,15 +2,24 @@ package events
 
 import (
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/runtime"
 )
 
-// PendingPlanFinder finds unapplied plans.
-type PendingPlanFinder struct{}
+//go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_pending_plan_finder.go PendingPlanFinder
+
+type PendingPlanFinder interface {
+	Find(pullDir string) ([]PendingPlan, error)
+	DeletePlans(pullDir string) error
+}
+
+// DefaultPendingPlanFinder finds unapplied plans.
+type DefaultPendingPlanFinder struct{}
 
 // PendingPlan is a plan that has not been applied.
 type PendingPlan struct {
@@ -21,18 +30,25 @@ type PendingPlan struct {
 	// the plan is for.
 	RepoRelDir string
 	// Workspace is the workspace this plan should execute in.
-	Workspace string
+	Workspace   string
+	ProjectName string
 }
 
 // Find finds all pending plans in pullDir. pullDir should be the working
 // directory where Atlantis will operate on this pull request. It's one level
 // up from where Atlantis clones the repo for each workspace.
-func (p *PendingPlanFinder) Find(pullDir string) ([]PendingPlan, error) {
+func (p *DefaultPendingPlanFinder) Find(pullDir string) ([]PendingPlan, error) {
+	plans, _, err := p.findWithAbsPaths(pullDir)
+	return plans, err
+}
+
+func (p *DefaultPendingPlanFinder) findWithAbsPaths(pullDir string) ([]PendingPlan, []string, error) {
 	workspaceDirs, err := ioutil.ReadDir(pullDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var plans []PendingPlan
+	var absPaths []string
 	for _, workspaceDir := range workspaceDirs {
 		workspace := workspaceDir.Name()
 		repoDir := filepath.Join(pullDir, workspace)
@@ -43,19 +59,43 @@ func (p *PendingPlanFinder) Find(pullDir string) ([]PendingPlan, error) {
 		lsCmd.Dir = repoDir
 		lsOut, err := lsCmd.CombinedOutput()
 		if err != nil {
-			return nil, errors.Wrapf(err, "running git ls-files . "+
+			return nil, nil, errors.Wrapf(err, "running git ls-files . "+
 				"--others: %s", string(lsOut))
 		}
 		for _, file := range strings.Split(string(lsOut), "\n") {
 			if filepath.Ext(file) == ".tfplan" {
-				repoRelDir := filepath.Dir(file)
+				// Ignore .terragrunt-cache dirs (#487)
+				if strings.Contains(file, ".terragrunt-cache/") {
+					continue
+				}
+
+				projectName, err := runtime.ProjectNameFromPlanfile(workspace, filepath.Base(file))
+				if err != nil {
+					return nil, nil, err
+				}
 				plans = append(plans, PendingPlan{
-					RepoDir:    repoDir,
-					RepoRelDir: repoRelDir,
-					Workspace:  workspace,
+					RepoDir:     repoDir,
+					RepoRelDir:  filepath.Dir(file),
+					Workspace:   workspace,
+					ProjectName: projectName,
 				})
+				absPaths = append(absPaths, filepath.Join(repoDir, file))
 			}
 		}
 	}
-	return plans, nil
+	return plans, absPaths, nil
+}
+
+// deletePlans deletes all plans in pullDir.
+func (p *DefaultPendingPlanFinder) DeletePlans(pullDir string) error {
+	_, absPaths, err := p.findWithAbsPaths(pullDir)
+	if err != nil {
+		return err
+	}
+	for _, path := range absPaths {
+		if err := os.Remove(path); err != nil {
+			return errors.Wrapf(err, "delete plan at %s", path)
+		}
+	}
+	return nil
 }

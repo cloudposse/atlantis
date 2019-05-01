@@ -1,6 +1,6 @@
 module.exports = {
     title: 'Atlantis',
-    description: 'Atlantis: Terraform For Teams',
+    description: 'Atlantis: Terraform Pull Request Automation',
     ga: "UA-6850151-3",
     head: [
         ['link', { rel: 'icon', type: 'image/png', href: '/favicon-196x196.png', sizes: '196x196' }],
@@ -31,33 +31,63 @@ module.exports = {
             {text: 'Home', link: '/'},
             {text: 'Guide', link: '/guide/'},
             {text: 'Docs', link: '/docs/'},
-            {text: 'Hosted Atlantis', link: '/hosting/'},
-            {text: 'Support & Consulting', link: '/support/'},
             {text: 'Blog', link: 'https://medium.com/runatlantis'}
         ],
         sidebar: {
-            '/docs/': [
-                '',
-                'pull-request-commands',
-                'deployment',
-                'server-configuration',
-                'apply-requirements',
-                'locking',
-                'autoplanning',
-                ['atlantis-yaml-reference', 'atlantis.yaml Reference'],
-                'upgrading-atlantis-yaml-to-version-2',
-                'security',
-                'faq',
-            ],
             '/guide/': [
                 '',
                 'test-drive',
-                'getting-started',
-                'requirements',
-                'atlantis-yaml-use-cases'
+                'testing-locally',
             ],
-            '/support/': [''],
-            '/hosting/': ['']
+            '/docs/': [
+                {
+                    title: 'Installing Atlantis',
+                    collapsable: true,
+                    children: [
+                        'installation-guide',
+                        'requirements',
+                        'access-credentials',
+                        'webhook-secrets',
+                        'deployment',
+                        'configuring-webhooks',
+                        'provider-credentials'
+                    ]
+                },
+                {
+                    title: 'Configuring Atlantis',
+                    collapsable: true,
+                    children: [
+                        ['configuring-atlantis', 'Overview'],
+                        'server-configuration',
+                        'server-side-repo-config',
+                        'custom-workflows',
+                        'repo-level-atlantis-yaml',
+                        'upgrading-atlantis-yaml',
+                        'apply-requirements',
+                        'checkout-strategy',
+                        'terraform-versions',
+                        'terraform-enterprise'
+                    ]
+                },
+                {
+                    title: 'Using Atlantis',
+                    collapsable: true,
+                    children: [
+                        ['using-atlantis', 'Overview']
+                    ]
+                },
+                {
+                    title: 'How Atlantis Works',
+                    collapsable: true,
+                    children: [
+                        ['how-atlantis-works', 'Overview'],
+                        'locking',
+                        'autoplanning',
+                        'automerging',
+                        'security'
+                    ]
+                }
+            ]
         },
         repo: 'runatlantis/atlantis',
         docsDir: 'runatlantis.io',

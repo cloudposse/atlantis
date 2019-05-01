@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 // Should follow pagination properly.
@@ -187,7 +187,7 @@ func TestClient_PullIsApproved(t *testing.T) {
 				switch r.RequestURI {
 				// The first request should hit this URL.
 				case "/2.0/repositories/owner/repo/pullrequests/1":
-					w.Write([]byte(json)) // nolint: errcheck
+					w.Write(json) // nolint: errcheck
 					return
 				default:
 					t.Errorf("got unexpected request at %q", r.RequestURI)
@@ -203,10 +203,10 @@ func TestClient_PullIsApproved(t *testing.T) {
 			repo, err := models.NewRepo(models.BitbucketServer, "owner/repo", "https://bitbucket.org/owner/repo.git", "user", "token")
 			Ok(t, err)
 			approved, err := client.PullIsApproved(repo, models.PullRequest{
-				Num:      1,
-				Branch:   "branch",
-				Author:   "author",
-				BaseRepo: repo,
+				Num:        1,
+				HeadBranch: "branch",
+				Author:     "author",
+				BaseRepo:   repo,
 			})
 			Ok(t, err)
 			Equals(t, c.exp, approved)

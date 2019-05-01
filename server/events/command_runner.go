@@ -16,13 +16,14 @@ package events
 import (
 	"fmt"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs"
-	"github.com/cloudposse/atlantis/server/logging"
-	"github.com/cloudposse/atlantis/server/recovery"
 	"github.com/google/go-github/github"
-	"github.com/lkysow/go-gitlab"
+	gitlab "github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/db"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/runatlantis/atlantis/server/recovery"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go CommandRunner
@@ -54,7 +55,7 @@ type GitlabMergeRequestGetter interface {
 
 // DefaultCommandRunner is the first step when processing a comment command.
 type DefaultCommandRunner struct {
-	VCSClient                vcs.ClientProxy
+	VCSClient                vcs.Client
 	GithubPullGetter         GithubPullGetter
 	GitlabMergeRequestGetter GitlabMergeRequestGetter
 	CommitStatusUpdater      CommitStatusUpdater
@@ -69,11 +70,18 @@ type DefaultCommandRunner struct {
 	AllowForkPRsFlag      string
 	ProjectCommandBuilder ProjectCommandBuilder
 	ProjectCommandRunner  ProjectCommandRunner
+	// GlobalAutomerge is true if we should automatically merge pull requests if all
+	// plans have been successfully applied. This is set via a CLI flag.
+	GlobalAutomerge   bool
+	PendingPlanFinder PendingPlanFinder
+	WorkingDir        WorkingDir
+	DB                *db.BoltDB
 }
 
 // RunAutoplanCommand runs plan when a pull request is opened or updated.
 func (c *DefaultCommandRunner) RunAutoplanCommand(baseRepo models.Repo, headRepo models.Repo, pull models.PullRequest, user models.User) {
 	log := c.buildLogger(baseRepo.FullName, pull.Num)
+	defer c.logPanics(baseRepo, pull.Num, log)
 	ctx := &CommandContext{
 		User:     user,
 		Log:      log,
@@ -81,29 +89,47 @@ func (c *DefaultCommandRunner) RunAutoplanCommand(baseRepo models.Repo, headRepo
 		HeadRepo: headRepo,
 		BaseRepo: baseRepo,
 	}
-	defer c.logPanics(ctx)
 	if !c.validateCtxAndComment(ctx) {
 		return
 	}
-	if err := c.CommitStatusUpdater.Update(ctx.BaseRepo, ctx.Pull, models.PendingCommitStatus, PlanCommand); err != nil {
+
+	if err := c.CommitStatusUpdater.UpdateCombined(ctx.BaseRepo, ctx.Pull, models.PendingCommitStatus, models.PlanCommand); err != nil {
 		ctx.Log.Warn("unable to update commit status: %s", err)
 	}
 
 	projectCmds, err := c.ProjectCommandBuilder.BuildAutoplanCommands(ctx)
 	if err != nil {
+		if statusErr := c.CommitStatusUpdater.UpdateCombined(ctx.BaseRepo, ctx.Pull, models.FailedCommitStatus, models.PlanCommand); statusErr != nil {
+			ctx.Log.Warn("unable to update commit status: %s", statusErr)
+		}
+
 		c.updatePull(ctx, AutoplanCommand{}, CommandResult{Error: err})
 		return
 	}
 	if len(projectCmds) == 0 {
 		log.Info("determined there was no project to run plan in")
-		if err := c.CommitStatusUpdater.Update(baseRepo, pull, models.SuccessCommitStatus, PlanCommand); err != nil {
+		// If there were no projects modified, we set a successful commit status
+		// with 0/0 projects planned successfully because we've already set an
+		// in-progress status and we don't want that to be "in progress" forever.
+		if err := c.CommitStatusUpdater.UpdateCombinedCount(baseRepo, pull, models.SuccessCommitStatus, models.PlanCommand, 0, 0); err != nil {
 			ctx.Log.Warn("unable to update commit status: %s", err)
 		}
 		return
 	}
 
-	results := c.runProjectCmds(projectCmds, PlanCommand)
-	c.updatePull(ctx, AutoplanCommand{}, CommandResult{ProjectResults: results})
+	result := c.runProjectCmds(projectCmds, models.PlanCommand)
+	if c.automergeEnabled(ctx, projectCmds) && result.HasErrors() {
+		ctx.Log.Info("deleting plans because there were errors and automerge requires all plans succeed")
+		c.deletePlans(ctx)
+		result.PlansDeleted = true
+	}
+	c.updatePull(ctx, AutoplanCommand{}, result)
+	pullStatus, err := c.updateDB(ctx, ctx.Pull, result.ProjectResults)
+	if err != nil {
+		c.Logger.Err("writing results: %s", err)
+	}
+
+	c.updateCommitStatus(ctx, models.PlanCommand, pullStatus)
 }
 
 // RunCommentCommand executes the command.
@@ -113,6 +139,8 @@ func (c *DefaultCommandRunner) RunAutoplanCommand(baseRepo models.Repo, headRepo
 // wasteful) call to get the necessary data.
 func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHeadRepo *models.Repo, maybePull *models.PullRequest, user models.User, pullNum int, cmd *CommentCommand) {
 	log := c.buildLogger(baseRepo.FullName, pullNum)
+	defer c.logPanics(baseRepo, pullNum, log)
+
 	var headRepo models.Repo
 	if maybeHeadRepo != nil {
 		headRepo = *maybeHeadRepo
@@ -135,6 +163,9 @@ func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHead
 	}
 	if err != nil {
 		log.Err(err.Error())
+		if commentErr := c.VCSClient.CreateComment(baseRepo, pullNum, fmt.Sprintf("`Error: %s`", err)); commentErr != nil {
+			log.Err("unable to comment: %s", commentErr)
+		}
 		return
 	}
 	ctx := &CommandContext{
@@ -144,53 +175,146 @@ func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHead
 		HeadRepo: headRepo,
 		BaseRepo: baseRepo,
 	}
-	defer c.logPanics(ctx)
 	if !c.validateCtxAndComment(ctx) {
 		return
 	}
-	if err = c.CommitStatusUpdater.Update(ctx.BaseRepo, ctx.Pull, models.PendingCommitStatus, cmd.CommandName()); err != nil {
+
+	if cmd.CommandName() == models.ApplyCommand {
+		// Get the mergeable status before we set any build statuses of our own.
+		// We do this here because when we set a "Pending" status, if users have
+		// required the Atlantis status checks to pass, then we've now changed
+		// the mergeability status of the pull request.
+		ctx.PullMergeable, err = c.VCSClient.PullIsMergeable(baseRepo, pull)
+		if err != nil {
+			// On error we continue the request with mergeable assumed false.
+			// We want to continue because not all apply's will need this status,
+			// only if they rely on the mergeability requirement.
+			ctx.PullMergeable = false
+			ctx.Log.Warn("unable to get mergeable status: %s. Continuing with mergeable assumed false", err)
+		}
+		ctx.Log.Info("pull request mergeable status: %t", ctx.PullMergeable)
+	}
+
+	if err = c.CommitStatusUpdater.UpdateCombined(baseRepo, pull, models.PendingCommitStatus, cmd.CommandName()); err != nil {
 		ctx.Log.Warn("unable to update commit status: %s", err)
 	}
 
 	var projectCmds []models.ProjectCommandContext
 	switch cmd.Name {
-	case PlanCommand:
+	case models.PlanCommand:
 		projectCmds, err = c.ProjectCommandBuilder.BuildPlanCommands(ctx, cmd)
-	case ApplyCommand:
+	case models.ApplyCommand:
 		projectCmds, err = c.ProjectCommandBuilder.BuildApplyCommands(ctx, cmd)
-	case DestroyCommand:
-		projectCmds, err = c.ProjectCommandBuilder.BuildDestroyCommands(ctx, cmd)
 	default:
 		ctx.Log.Err("failed to determine desired command, neither plan nor apply")
 		return
 	}
 	if err != nil {
+		if statusErr := c.CommitStatusUpdater.UpdateCombined(ctx.BaseRepo, ctx.Pull, models.FailedCommitStatus, cmd.CommandName()); statusErr != nil {
+			ctx.Log.Warn("unable to update commit status: %s", statusErr)
+		}
 		c.updatePull(ctx, cmd, CommandResult{Error: err})
 		return
 	}
-	results := c.runProjectCmds(projectCmds, cmd.Name)
+
+	result := c.runProjectCmds(projectCmds, cmd.Name)
+	if cmd.Name == models.PlanCommand && c.automergeEnabled(ctx, projectCmds) && result.HasErrors() {
+		ctx.Log.Info("deleting plans because there were errors and automerge requires all plans succeed")
+		c.deletePlans(ctx)
+		result.PlansDeleted = true
+	}
 	c.updatePull(
 		ctx,
 		cmd,
-		CommandResult{
-			ProjectResults: results})
+		result)
+
+	pullStatus, err := c.updateDB(ctx, pull, result.ProjectResults)
+	if err != nil {
+		c.Logger.Err("writing results: %s", err)
+		return
+	}
+
+	c.updateCommitStatus(ctx, cmd.Name, pullStatus)
+
+	if cmd.Name == models.ApplyCommand && c.automergeEnabled(ctx, projectCmds) {
+		c.automerge(ctx, pullStatus)
+	}
 }
 
-func (c *DefaultCommandRunner) runProjectCmds(cmds []models.ProjectCommandContext, cmdName CommandName) []ProjectResult {
-	var results []ProjectResult
+func (c *DefaultCommandRunner) updateCommitStatus(ctx *CommandContext, cmd models.CommandName, pullStatus models.PullStatus) {
+	var numSuccess int
+	var status models.CommitStatus
+
+	if cmd == models.PlanCommand {
+		// We consider anything that isn't a plan error as a plan success.
+		// For example, if there is an apply error, that means that at least a
+		// plan was generated successfully.
+		numSuccess = len(pullStatus.Projects) - pullStatus.StatusCount(models.ErroredPlanStatus)
+		status = models.SuccessCommitStatus
+		if numSuccess != len(pullStatus.Projects) {
+			status = models.FailedCommitStatus
+		}
+	} else {
+		numSuccess = pullStatus.StatusCount(models.AppliedPlanStatus)
+
+		numErrored := pullStatus.StatusCount(models.ErroredApplyStatus)
+		status = models.SuccessCommitStatus
+		if numErrored > 0 {
+			status = models.FailedCommitStatus
+		} else if numSuccess < len(pullStatus.Projects) {
+			// If there are plans that haven't been applied yet, we'll use a pending
+			// status.
+			status = models.PendingCommitStatus
+		}
+	}
+
+	if err := c.CommitStatusUpdater.UpdateCombinedCount(ctx.BaseRepo, ctx.Pull, status, cmd, numSuccess, len(pullStatus.Projects)); err != nil {
+		ctx.Log.Warn("unable to update commit status: %s", err)
+	}
+}
+
+func (c *DefaultCommandRunner) automerge(ctx *CommandContext, pullStatus models.PullStatus) {
+	// We only automerge if all projects have been successfully applied.
+	for _, p := range pullStatus.Projects {
+		if p.Status != models.AppliedPlanStatus {
+			ctx.Log.Info("not automerging because project at dir %q, workspace %q has status %q", p.RepoRelDir, p.Workspace, p.Status.String())
+			return
+		}
+	}
+
+	// Comment that we're automerging the pull request.
+	if err := c.VCSClient.CreateComment(ctx.BaseRepo, ctx.Pull.Num, automergeComment); err != nil {
+		ctx.Log.Err("failed to comment about automerge: %s", err)
+		// Commenting isn't required so continue.
+	}
+
+	// Make the API call to perform the merge.
+	ctx.Log.Info("automerging pull request")
+	err := c.VCSClient.MergePull(ctx.Pull)
+
+	if err != nil {
+		ctx.Log.Err("automerging failed: %s", err)
+
+		failureComment := fmt.Sprintf("Automerging failed:\n```\n%s\n```", err)
+		if commentErr := c.VCSClient.CreateComment(ctx.BaseRepo, ctx.Pull.Num, failureComment); commentErr != nil {
+			ctx.Log.Err("failed to comment about automerge failing: %s", err)
+		}
+	}
+}
+
+func (c *DefaultCommandRunner) runProjectCmds(cmds []models.ProjectCommandContext, cmdName models.CommandName) CommandResult {
+	var results []models.ProjectResult
 	for _, pCmd := range cmds {
-		var res ProjectResult
+		var res models.ProjectResult
 		switch cmdName {
-		case PlanCommand:
+		case models.PlanCommand:
 			res = c.ProjectCommandRunner.Plan(pCmd)
-		case ApplyCommand:
+		case models.ApplyCommand:
 			res = c.ProjectCommandRunner.Apply(pCmd)
-		case DestroyCommand:
-			res = c.ProjectCommandRunner.Destroy(pCmd)
 		}
 		results = append(results, res)
 	}
-	return results
+	return CommandResult{ProjectResults: results}
 }
 
 func (c *DefaultCommandRunner) getGithubData(baseRepo models.Repo, pullNum int) (models.PullRequest, models.Repo, error) {
@@ -222,7 +346,7 @@ func (c *DefaultCommandRunner) getGitlabData(baseRepo models.Repo, pullNum int) 
 
 func (c *DefaultCommandRunner) buildLogger(repoFullName string, pullNum int) *logging.SimpleLogger {
 	src := fmt.Sprintf("%s#%d", repoFullName, pullNum)
-	return logging.NewSimpleLogger(src, c.Logger.Underlying(), true, c.Logger.GetLevel())
+	return c.Logger.NewLogger(src, true, c.Logger.GetLevel())
 }
 
 func (c *DefaultCommandRunner) validateCtxAndComment(ctx *CommandContext) bool {
@@ -252,10 +376,6 @@ func (c *DefaultCommandRunner) updatePull(ctx *CommandContext, command PullComma
 		ctx.Log.Warn(res.Failure)
 	}
 
-	// Update the pull request's status icon and comment back.
-	if err := c.CommitStatusUpdater.UpdateProjectResult(ctx, command.CommandName(), res); err != nil {
-		ctx.Log.Warn("unable to update commit status: %s", err)
-	}
 	comment := c.MarkdownRenderer.Render(res, command.CommandName(), ctx.Log.History.String(), command.IsVerbose(), ctx.BaseRepo.VCSHost.Type)
 	if err := c.VCSClient.CreateComment(ctx.BaseRepo, ctx.Pull.Num, comment); err != nil {
 		ctx.Log.Err("unable to comment: %s", err)
@@ -263,11 +383,55 @@ func (c *DefaultCommandRunner) updatePull(ctx *CommandContext, command PullComma
 }
 
 // logPanics logs and creates a comment on the pull request for panics.
-func (c *DefaultCommandRunner) logPanics(ctx *CommandContext) {
+func (c *DefaultCommandRunner) logPanics(baseRepo models.Repo, pullNum int, logger logging.SimpleLogging) {
 	if err := recover(); err != nil {
 		stack := recovery.Stack(3)
-		c.VCSClient.CreateComment(ctx.BaseRepo, ctx.Pull.Num, // nolint: errcheck
-			fmt.Sprintf("**Error: goroutine panic. This is a bug.**\n```\n%s\n%s```", err, stack))
-		ctx.Log.Err("PANIC: %s\n%s", err, stack)
+		logger.Err("PANIC: %s\n%s", err, stack)
+		if commentErr := c.VCSClient.CreateComment(
+			baseRepo,
+			pullNum,
+			fmt.Sprintf("**Error: goroutine panic. This is a bug.**\n```\n%s\n%s```", err, stack),
+		); commentErr != nil {
+			logger.Err("unable to comment: %s", commentErr)
+		}
 	}
 }
+
+// deletePlans deletes all plans generated in this ctx.
+func (c *DefaultCommandRunner) deletePlans(ctx *CommandContext) {
+	pullDir, err := c.WorkingDir.GetPullDir(ctx.BaseRepo, ctx.Pull)
+	if err != nil {
+		ctx.Log.Err("getting pull dir: %s", err)
+	}
+	if err := c.PendingPlanFinder.DeletePlans(pullDir); err != nil {
+		ctx.Log.Err("deleting pending plans: %s", err)
+	}
+}
+
+func (c *DefaultCommandRunner) updateDB(ctx *CommandContext, pull models.PullRequest, results []models.ProjectResult) (models.PullStatus, error) {
+	// Filter out results that errored due to the directory not existing. We
+	// don't store these in the database because they would never be "applyable"
+	// and so the pull request would always have errors.
+	var filtered []models.ProjectResult
+	for _, r := range results {
+		if _, ok := r.Error.(DirNotExistErr); ok {
+			ctx.Log.Debug("ignoring error result from project at dir %q workspace %q because it is dir not exist error", r.RepoRelDir, r.Workspace)
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	ctx.Log.Debug("updating DB with pull results")
+	return c.DB.UpdatePullWithResults(pull, filtered)
+}
+
+// automergeEnabled returns true if automerging is enabled in this context.
+func (c *DefaultCommandRunner) automergeEnabled(ctx *CommandContext, projectCmds []models.ProjectCommandContext) bool {
+	// If the global automerge is set, we always automerge.
+	return c.GlobalAutomerge ||
+		// Otherwise we check if this repo is configured for automerging.
+		(len(projectCmds) > 0 && projectCmds[0].AutomergeEnabled)
+}
+
+// automergeComment is the comment that gets posted when Atlantis automatically
+// merges the PR.
+var automergeComment = `Automatically merging because all plans have been successfully applied.`

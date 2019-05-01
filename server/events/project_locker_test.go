@@ -16,13 +16,13 @@ package events_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/locking"
-	"github.com/cloudposse/atlantis/server/events/locking/mocks"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/locking"
+	"github.com/runatlantis/atlantis/server/events/locking/mocks"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestDefaultProjectLocker_TryLockWhenLocked(t *testing.T) {
@@ -52,7 +52,7 @@ func TestDefaultProjectLocker_TryLockWhenLocked(t *testing.T) {
 	Ok(t, err)
 	Equals(t, &events.TryLockResponse{
 		LockAcquired:      false,
-		LockFailureReason: "This project is currently locked by #2. The locking plan must be applied or discarded before future plans can execute.",
+		LockFailureReason: "This project is currently locked by an unapplied plan from pull #2. To continue, delete the lock from #2 or apply that plan and merge the pull request.\n\nOnce the lock is released, comment `atlantis plan` here to re-plan.",
 	}, res)
 }
 

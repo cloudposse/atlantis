@@ -20,10 +20,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/cmd"
-	"github.com/cloudposse/atlantis/server"
-	. "github.com/cloudposse/atlantis/testing"
-	"github.com/mitchellh/go-homedir"
+	homedir "github.com/mitchellh/go-homedir"
+	"github.com/runatlantis/atlantis/cmd"
+	"github.com/runatlantis/atlantis/server"
+	. "github.com/runatlantis/atlantis/testing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -125,6 +125,14 @@ func TestExecute_ValidateLogLevel(t *testing.T) {
 	err := c.Execute()
 	Assert(t, err != nil, "should be an error")
 	Equals(t, "invalid log level: not one of debug, info, warn, error", err.Error())
+}
+
+func TestExecute_ValidateCheckoutStrategy(t *testing.T) {
+	c := setupWithDefaults(map[string]interface{}{
+		cmd.CheckoutStrategyFlag: "invalid",
+	})
+	err := c.Execute()
+	ErrEquals(t, "invalid checkout strategy: not one of branch or merge", err)
 }
 
 func TestExecute_ValidateSSLConfig(t *testing.T) {
@@ -314,7 +322,6 @@ func TestExecute_Defaults(t *testing.T) {
 		cmd.GitlabTokenFlag:    "gitlab-token",
 		cmd.BitbucketUserFlag:  "bitbucket-user",
 		cmd.BitbucketTokenFlag: "bitbucket-token",
-		cmd.RepoConfigFlag:     "atlantis.yaml",
 		cmd.RepoWhitelistFlag:  "*",
 	})
 	err := c.Execute()
@@ -326,12 +333,15 @@ func TestExecute_Defaults(t *testing.T) {
 	Equals(t, "http://"+hostname+":4141", passedConfig.AtlantisURL)
 	Equals(t, false, passedConfig.AllowForkPRs)
 	Equals(t, false, passedConfig.AllowRepoConfig)
+	Equals(t, false, passedConfig.Automerge)
 
 	// Get our home dir since that's what gets defaulted to
 	dataDir, err := homedir.Expand("~/.atlantis")
 	Ok(t, err)
 	Equals(t, dataDir, passedConfig.DataDir)
 
+	Equals(t, "branch", passedConfig.CheckoutStrategy)
+	Equals(t, "", passedConfig.DefaultTFVersion)
 	Equals(t, "github.com", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
 	Equals(t, "user", passedConfig.GithubUser)
@@ -347,8 +357,11 @@ func TestExecute_Defaults(t *testing.T) {
 	Equals(t, "info", passedConfig.LogLevel)
 	Equals(t, 4141, passedConfig.Port)
 	Equals(t, false, passedConfig.RequireApproval)
+	Equals(t, false, passedConfig.RequireMergeable)
+	Equals(t, "", passedConfig.SlackToken)
 	Equals(t, "", passedConfig.SSLCertFile)
 	Equals(t, "", passedConfig.SSLKeyFile)
+	Equals(t, "", passedConfig.TFEToken)
 }
 
 func TestExecute_ExpandHomeInDataDir(t *testing.T) {
@@ -427,11 +440,14 @@ func TestExecute_Flags(t *testing.T) {
 		cmd.AtlantisURLFlag:            "url",
 		cmd.AllowForkPRsFlag:           true,
 		cmd.AllowRepoConfigFlag:        true,
+		cmd.AutomergeFlag:              true,
 		cmd.BitbucketBaseURLFlag:       "https://bitbucket-base-url.com",
 		cmd.BitbucketTokenFlag:         "bitbucket-token",
 		cmd.BitbucketUserFlag:          "bitbucket-user",
 		cmd.BitbucketWebhookSecretFlag: "bitbucket-secret",
+		cmd.CheckoutStrategyFlag:       "merge",
 		cmd.DataDirFlag:                "/path",
+		cmd.DefaultTFVersionFlag:       "v0.11.0",
 		cmd.GHHostnameFlag:             "ghhostname",
 		cmd.GHTokenFlag:                "token",
 		cmd.GHUserFlag:                 "user",
@@ -442,11 +458,13 @@ func TestExecute_Flags(t *testing.T) {
 		cmd.GitlabWebhookSecretFlag:    "gitlab-secret",
 		cmd.LogLevelFlag:               "debug",
 		cmd.PortFlag:                   8181,
-		cmd.RepoConfigFlag:             "atlantis.yaml",
 		cmd.RepoWhitelistFlag:          "github.com/runatlantis/atlantis",
 		cmd.RequireApprovalFlag:        true,
+		cmd.RequireMergeableFlag:       true,
+		cmd.SlackTokenFlag:             "slack-token",
 		cmd.SSLCertFileFlag:            "cert-file",
 		cmd.SSLKeyFileFlag:             "key-file",
+		cmd.TFETokenFlag:               "my-token",
 	})
 	err := c.Execute()
 	Ok(t, err)
@@ -454,11 +472,14 @@ func TestExecute_Flags(t *testing.T) {
 	Equals(t, "url", passedConfig.AtlantisURL)
 	Equals(t, true, passedConfig.AllowForkPRs)
 	Equals(t, true, passedConfig.AllowRepoConfig)
+	Equals(t, true, passedConfig.Automerge)
 	Equals(t, "https://bitbucket-base-url.com", passedConfig.BitbucketBaseURL)
 	Equals(t, "bitbucket-token", passedConfig.BitbucketToken)
 	Equals(t, "bitbucket-user", passedConfig.BitbucketUser)
 	Equals(t, "bitbucket-secret", passedConfig.BitbucketWebhookSecret)
+	Equals(t, "merge", passedConfig.CheckoutStrategy)
 	Equals(t, "/path", passedConfig.DataDir)
+	Equals(t, "v0.11.0", passedConfig.DefaultTFVersion)
 	Equals(t, "ghhostname", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
 	Equals(t, "user", passedConfig.GithubUser)
@@ -469,11 +490,13 @@ func TestExecute_Flags(t *testing.T) {
 	Equals(t, "gitlab-secret", passedConfig.GitlabWebhookSecret)
 	Equals(t, "debug", passedConfig.LogLevel)
 	Equals(t, 8181, passedConfig.Port)
-	Equals(t, "atlantis.yaml", passedConfig.RepoConfig)
 	Equals(t, "github.com/runatlantis/atlantis", passedConfig.RepoWhitelist)
 	Equals(t, true, passedConfig.RequireApproval)
+	Equals(t, true, passedConfig.RequireMergeable)
+	Equals(t, "slack-token", passedConfig.SlackToken)
 	Equals(t, "cert-file", passedConfig.SSLCertFile)
 	Equals(t, "key-file", passedConfig.SSLKeyFile)
+	Equals(t, "my-token", passedConfig.TFEToken)
 }
 
 func TestExecute_ConfigFile(t *testing.T) {
@@ -482,11 +505,14 @@ func TestExecute_ConfigFile(t *testing.T) {
 atlantis-url: "url"
 allow-fork-prs: true
 allow-repo-config: true
+automerge: true
 bitbucket-base-url: "https://mydomain.com"
 bitbucket-token: "bitbucket-token"
 bitbucket-user: "bitbucket-user"
 bitbucket-webhook-secret: "bitbucket-secret"
+checkout-strategy: "merge"
 data-dir: "/path"
+default-tf-version: "v0.11.0"
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -497,11 +523,13 @@ gitlab-user: "gitlab-user"
 gitlab-webhook-secret: "gitlab-secret"
 log-level: "debug"
 port: 8181
-repo-config: "atlantis.yaml"
 repo-whitelist: "github.com/runatlantis/atlantis"
 require-approval: true
+require-mergeable: true
+slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
+tfe-token: my-token
 `)
 	defer os.Remove(tmpFile) // nolint: errcheck
 	c := setup(map[string]interface{}{
@@ -513,11 +541,14 @@ ssl-key-file: key-file
 	Equals(t, "url", passedConfig.AtlantisURL)
 	Equals(t, true, passedConfig.AllowForkPRs)
 	Equals(t, true, passedConfig.AllowRepoConfig)
+	Equals(t, true, passedConfig.Automerge)
 	Equals(t, "https://mydomain.com", passedConfig.BitbucketBaseURL)
 	Equals(t, "bitbucket-token", passedConfig.BitbucketToken)
 	Equals(t, "bitbucket-user", passedConfig.BitbucketUser)
 	Equals(t, "bitbucket-secret", passedConfig.BitbucketWebhookSecret)
+	Equals(t, "merge", passedConfig.CheckoutStrategy)
 	Equals(t, "/path", passedConfig.DataDir)
+	Equals(t, "v0.11.0", passedConfig.DefaultTFVersion)
 	Equals(t, "ghhostname", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
 	Equals(t, "user", passedConfig.GithubUser)
@@ -528,11 +559,13 @@ ssl-key-file: key-file
 	Equals(t, "gitlab-secret", passedConfig.GitlabWebhookSecret)
 	Equals(t, "debug", passedConfig.LogLevel)
 	Equals(t, 8181, passedConfig.Port)
-	Equals(t, "atlantis.yaml", passedConfig.RepoConfig)
 	Equals(t, "github.com/runatlantis/atlantis", passedConfig.RepoWhitelist)
 	Equals(t, true, passedConfig.RequireApproval)
+	Equals(t, true, passedConfig.RequireMergeable)
+	Equals(t, "slack-token", passedConfig.SlackToken)
 	Equals(t, "cert-file", passedConfig.SSLCertFile)
 	Equals(t, "key-file", passedConfig.SSLKeyFile)
+	Equals(t, "my-token", passedConfig.TFEToken)
 }
 
 func TestExecute_EnvironmentOverride(t *testing.T) {
@@ -541,11 +574,14 @@ func TestExecute_EnvironmentOverride(t *testing.T) {
 atlantis-url: "url"
 allow-fork-prs: true
 allow-repo-config: true
+automerge: true
 bitbucket-base-url: "https://mydomain.com"
 bitbucket-token: "bitbucket-token"
 bitbucket-user: "bitbucket-user"
 bitbucket-webhook-secret: "bitbucket-secret"
+checkout-strategy: "merge"
 data-dir: "/path"
+default-tf-version: "v0.11.0"
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -556,11 +592,12 @@ gitlab-user: "gitlab-user"
 gitlab-webhook-secret: "gitlab-secret"
 log-level: "debug"
 port: 8181
-repo-config: "atlantis.yaml"
 repo-whitelist: "github.com/runatlantis/atlantis"
 require-approval: true
+slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
+tfe-token: my-token
 `)
 	defer os.Remove(tmpFile) // nolint: errcheck
 
@@ -568,12 +605,15 @@ ssl-key-file: key-file
 	for name, value := range map[string]string{
 		"ATLANTIS_URL":             "override-url",
 		"ALLOW_FORK_PRS":           "false",
-		"ALLOW_REPO_CONFIG":        "true",
+		"ALLOW_REPO_CONFIG":        "false",
+		"AUTOMERGE":                "false",
 		"BITBUCKET_BASE_URL":       "https://override-bitbucket-base-url",
 		"BITBUCKET_TOKEN":          "override-bitbucket-token",
 		"BITBUCKET_USER":           "override-bitbucket-user",
 		"BITBUCKET_WEBHOOK_SECRET": "override-bitbucket-secret",
+		"CHECKOUT_STRATEGY":        "branch",
 		"DATA_DIR":                 "/override-path",
+		"DEFAULT_TF_VERSION":       "v0.12.0",
 		"GH_HOSTNAME":              "override-gh-hostname",
 		"GH_TOKEN":                 "override-gh-token",
 		"GH_USER":                  "override-gh-user",
@@ -586,8 +626,11 @@ ssl-key-file: key-file
 		"PORT":                     "8282",
 		"REPO_WHITELIST":           "override,override",
 		"REQUIRE_APPROVAL":         "false",
+		"REQUIRE_MERGEABLE":        "false",
+		"SLACK_TOKEN":              "override-slack-token",
 		"SSL_CERT_FILE":            "override-cert-file",
 		"SSL_KEY_FILE":             "override-key-file",
+		"TFE_TOKEN":                "override-my-token",
 	} {
 		os.Setenv("ATLANTIS_"+name, value) // nolint: errcheck
 	}
@@ -598,12 +641,15 @@ ssl-key-file: key-file
 	Ok(t, err)
 	Equals(t, "override-url", passedConfig.AtlantisURL)
 	Equals(t, false, passedConfig.AllowForkPRs)
-	Equals(t, true, passedConfig.AllowRepoConfig)
+	Equals(t, false, passedConfig.AllowRepoConfig)
+	Equals(t, false, passedConfig.Automerge)
 	Equals(t, "https://override-bitbucket-base-url", passedConfig.BitbucketBaseURL)
 	Equals(t, "override-bitbucket-token", passedConfig.BitbucketToken)
 	Equals(t, "override-bitbucket-user", passedConfig.BitbucketUser)
 	Equals(t, "override-bitbucket-secret", passedConfig.BitbucketWebhookSecret)
+	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
+	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -614,11 +660,13 @@ ssl-key-file: key-file
 	Equals(t, "override-gitlab-webhook-secret", passedConfig.GitlabWebhookSecret)
 	Equals(t, "info", passedConfig.LogLevel)
 	Equals(t, 8282, passedConfig.Port)
-	Equals(t, "override-atlantis.yaml", passedConfig.RepoConfig)
 	Equals(t, "override,override", passedConfig.RepoWhitelist)
 	Equals(t, false, passedConfig.RequireApproval)
+	Equals(t, false, passedConfig.RequireMergeable)
+	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
+	Equals(t, "override-my-token", passedConfig.TFEToken)
 }
 
 func TestExecute_FlagConfigOverride(t *testing.T) {
@@ -626,12 +674,15 @@ func TestExecute_FlagConfigOverride(t *testing.T) {
 	tmpFile := tempFile(t, `---
 atlantis-url: "url"
 allow-fork-prs: true
-allow-repo-config: false
+allow-repo-config: true
+automerge: true
 bitbucket-base-url: "https://bitbucket-base-url"
 bitbucket-token: "bitbucket-token"
 bitbucket-user: "bitbucket-user"
 bitbucket-webhook-secret: "bitbucket-secret"
+checkout-strategy: "merge"
 data-dir: "/path"
+default-tf-version: "v0.11.0"
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -642,23 +693,28 @@ gitlab-user: "gitlab-user"
 gitlab-webhook-secret: "gitlab-secret"
 log-level: "debug"
 port: 8181
-repo-config: "atlantis.yaml"
 repo-whitelist: "github.com/runatlantis/atlantis"
 require-approval: true
+require-mergeable: true
+slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
+tfe-token: my-token
 `)
 
 	defer os.Remove(tmpFile) // nolint: errcheck
 	c := setup(map[string]interface{}{
 		cmd.AtlantisURLFlag:            "override-url",
 		cmd.AllowForkPRsFlag:           false,
-		cmd.AllowRepoConfigFlag:        true,
+		cmd.AllowRepoConfigFlag:        false,
+		cmd.AutomergeFlag:              false,
 		cmd.BitbucketBaseURLFlag:       "https://override-bitbucket-base-url",
 		cmd.BitbucketTokenFlag:         "override-bitbucket-token",
 		cmd.BitbucketUserFlag:          "override-bitbucket-user",
 		cmd.BitbucketWebhookSecretFlag: "override-bitbucket-secret",
+		cmd.CheckoutStrategyFlag:       "branch",
 		cmd.DataDirFlag:                "/override-path",
+		cmd.DefaultTFVersionFlag:       "v0.12.0",
 		cmd.GHHostnameFlag:             "override-gh-hostname",
 		cmd.GHTokenFlag:                "override-gh-token",
 		cmd.GHUserFlag:                 "override-gh-user",
@@ -669,21 +725,26 @@ ssl-key-file: key-file
 		cmd.GitlabWebhookSecretFlag:    "override-gitlab-webhook-secret",
 		cmd.LogLevelFlag:               "info",
 		cmd.PortFlag:                   8282,
-		cmd.RepoConfigFlag:             "override-atlantis.yaml",
 		cmd.RepoWhitelistFlag:          "override,override",
 		cmd.RequireApprovalFlag:        false,
+		cmd.RequireMergeableFlag:       false,
+		cmd.SlackTokenFlag:             "override-slack-token",
 		cmd.SSLCertFileFlag:            "override-cert-file",
 		cmd.SSLKeyFileFlag:             "override-key-file",
+		cmd.TFETokenFlag:               "override-my-token",
 	})
 	err := c.Execute()
 	Ok(t, err)
 	Equals(t, "override-url", passedConfig.AtlantisURL)
 	Equals(t, false, passedConfig.AllowForkPRs)
+	Equals(t, false, passedConfig.Automerge)
 	Equals(t, "https://override-bitbucket-base-url", passedConfig.BitbucketBaseURL)
 	Equals(t, "override-bitbucket-token", passedConfig.BitbucketToken)
 	Equals(t, "override-bitbucket-user", passedConfig.BitbucketUser)
 	Equals(t, "override-bitbucket-secret", passedConfig.BitbucketWebhookSecret)
+	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
+	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -694,11 +755,14 @@ ssl-key-file: key-file
 	Equals(t, "override-gitlab-webhook-secret", passedConfig.GitlabWebhookSecret)
 	Equals(t, "info", passedConfig.LogLevel)
 	Equals(t, 8282, passedConfig.Port)
-	Equals(t, "override-atlantis.yaml", passedConfig.RepoConfig)
 	Equals(t, "override,override", passedConfig.RepoWhitelist)
 	Equals(t, false, passedConfig.RequireApproval)
+	Equals(t, false, passedConfig.RequireMergeable)
+	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
+	Equals(t, "override-my-token", passedConfig.TFEToken)
+
 }
 
 func TestExecute_FlagEnvVarOverride(t *testing.T) {
@@ -707,12 +771,15 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 	envVars := map[string]string{
 		"ATLANTIS_URL":             "url",
 		"ALLOW_FORK_PRS":           "true",
-		"ALLOW_REPO_CONFIG":        "false",
+		"ALLOW_REPO_CONFIG":        "true",
+		"AUTOMERGE":                "true",
 		"BITBUCKET_BASE_URL":       "https://bitbucket-base-url",
 		"BITBUCKET_TOKEN":          "bitbucket-token",
 		"BITBUCKET_USER":           "bitbucket-user",
 		"BITBUCKET_WEBHOOK_SECRET": "bitbucket-secret",
+		"CHECKOUT_STRATEGY":        "merge",
 		"DATA_DIR":                 "/path",
+		"DEFAULT_TF_VERSION":       "v0.11.0",
 		"GH_HOSTNAME":              "gh-hostname",
 		"GH_TOKEN":                 "gh-token",
 		"GH_USER":                  "gh-user",
@@ -725,8 +792,11 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		"PORT":                     "8181",
 		"REPO_WHITELIST":           "*",
 		"REQUIRE_APPROVAL":         "true",
+		"REQUIRE_MERGEABLE":        "true",
+		"SLACK_TOKEN":              "slack-token",
 		"SSL_CERT_FILE":            "cert-file",
 		"SSL_KEY_FILE":             "key-file",
+		"TFE_TOKEN":                "my-token",
 	}
 	for name, value := range envVars {
 		os.Setenv("ATLANTIS_"+name, value) // nolint: errcheck
@@ -741,12 +811,15 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 	c := setup(map[string]interface{}{
 		cmd.AtlantisURLFlag:            "override-url",
 		cmd.AllowForkPRsFlag:           false,
-		cmd.AllowRepoConfigFlag:        true,
+		cmd.AllowRepoConfigFlag:        false,
+		cmd.AutomergeFlag:              false,
 		cmd.BitbucketBaseURLFlag:       "https://override-bitbucket-base-url",
 		cmd.BitbucketTokenFlag:         "override-bitbucket-token",
 		cmd.BitbucketUserFlag:          "override-bitbucket-user",
 		cmd.BitbucketWebhookSecretFlag: "override-bitbucket-secret",
+		cmd.CheckoutStrategyFlag:       "branch",
 		cmd.DataDirFlag:                "/override-path",
+		cmd.DefaultTFVersionFlag:       "v0.12.0",
 		cmd.GHHostnameFlag:             "override-gh-hostname",
 		cmd.GHTokenFlag:                "override-gh-token",
 		cmd.GHUserFlag:                 "override-gh-user",
@@ -757,23 +830,28 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		cmd.GitlabWebhookSecretFlag:    "override-gitlab-webhook-secret",
 		cmd.LogLevelFlag:               "info",
 		cmd.PortFlag:                   8282,
-		cmd.RepoConfigFlag:             "override-atlantis.yaml",
 		cmd.RepoWhitelistFlag:          "override,override",
 		cmd.RequireApprovalFlag:        false,
+		cmd.RequireMergeableFlag:       false,
+		cmd.SlackTokenFlag:             "override-slack-token",
 		cmd.SSLCertFileFlag:            "override-cert-file",
 		cmd.SSLKeyFileFlag:             "override-key-file",
+		cmd.TFETokenFlag:               "override-my-token",
 	})
 	err := c.Execute()
 	Ok(t, err)
 
 	Equals(t, "override-url", passedConfig.AtlantisURL)
 	Equals(t, false, passedConfig.AllowForkPRs)
-	Equals(t, true, passedConfig.AllowRepoConfig)
+	Equals(t, false, passedConfig.AllowRepoConfig)
+	Equals(t, false, passedConfig.Automerge)
 	Equals(t, "https://override-bitbucket-base-url", passedConfig.BitbucketBaseURL)
 	Equals(t, "override-bitbucket-token", passedConfig.BitbucketToken)
 	Equals(t, "override-bitbucket-user", passedConfig.BitbucketUser)
 	Equals(t, "override-bitbucket-secret", passedConfig.BitbucketWebhookSecret)
+	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
+	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -784,11 +862,13 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 	Equals(t, "override-gitlab-webhook-secret", passedConfig.GitlabWebhookSecret)
 	Equals(t, "info", passedConfig.LogLevel)
 	Equals(t, 8282, passedConfig.Port)
-	Equals(t, "override-atlantis.yaml", passedConfig.RepoConfig)
 	Equals(t, "override,override", passedConfig.RepoWhitelist)
 	Equals(t, false, passedConfig.RequireApproval)
+	Equals(t, false, passedConfig.RequireMergeable)
+	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
+	Equals(t, "override-my-token", passedConfig.TFEToken)
 }
 
 // If using bitbucket cloud, webhook secrets are not supported.
@@ -834,17 +914,17 @@ func TestExecute_BitbucketServerBaseURLPort(t *testing.T) {
 	Equals(t, "http://mydomain.com:7990", passedConfig.BitbucketBaseURL)
 }
 
-func TestExecute_RepoConfigWithoutAllowRepoConfig(t *testing.T) {
-	t.Log("Should error when repo-config provided and allow-repo-config false.")
+// Can't use both --repo-config and --repo-config-json.
+func TestExecute_RepoCfgFlags(t *testing.T) {
 	c := setup(map[string]interface{}{
-		cmd.BitbucketUserFlag:   "user",
-		cmd.BitbucketTokenFlag:  "token",
-		cmd.RepoWhitelistFlag:   "*",
-		cmd.AllowRepoConfigFlag: false,
-		cmd.RepoConfigFlag:      "atlantis-stage.yaml",
+		cmd.GHUserFlag:         "user",
+		cmd.GHTokenFlag:        "token",
+		cmd.RepoWhitelistFlag:  "github.com",
+		cmd.RepoConfigFlag:     "repos.yaml",
+		cmd.RepoConfigJSONFlag: "{}",
 	})
 	err := c.Execute()
-	ErrEquals(t, "custom --repo-config cannot be specified if --allow-repo-config is false", err)
+	ErrEquals(t, "cannot use --repo-config and --repo-config-json at the same time", err)
 }
 
 func setup(flags map[string]interface{}) *cobra.Command {

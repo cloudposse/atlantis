@@ -17,8 +17,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_commit_status_updater.go CommitStatusUpdater
@@ -26,44 +26,61 @@ import (
 // CommitStatusUpdater updates the status of a commit with the VCS host. We set
 // the status to signify whether the plan/apply succeeds.
 type CommitStatusUpdater interface {
-	// Update updates the status of the head commit of pull.
-	Update(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command CommandName) error
-	// UpdateProjectResult updates the status of the head commit given the
-	// state of response.
-	UpdateProjectResult(ctx *CommandContext, commandName CommandName, res CommandResult) error
+	// UpdateCombined updates the combined status of the head commit of pull.
+	// A combined status represents all the projects modified in the pull.
+	UpdateCombined(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command models.CommandName) error
+	// UpdateCombinedCount updates the combined status to reflect the
+	// numSuccess out of numTotal.
+	UpdateCombinedCount(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command models.CommandName, numSuccess int, numTotal int) error
+	// UpdateProject sets the commit status for the project represented by
+	// ctx.
+	UpdateProject(ctx models.ProjectCommandContext, cmdName models.CommandName, status models.CommitStatus, url string) error
 }
 
 // DefaultCommitStatusUpdater implements CommitStatusUpdater.
 type DefaultCommitStatusUpdater struct {
-	Client vcs.ClientProxy
+	Client vcs.Client
 }
 
-// Update updates the commit status.
-func (d *DefaultCommitStatusUpdater) Update(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command CommandName) error {
-	description := fmt.Sprintf("%s %s", strings.Title(command.String()), strings.Title(status.String()))
-	return d.Client.UpdateStatus(repo, pull, status, description)
-}
-
-// UpdateProjectResult updates the commit status based on the status of res.
-func (d *DefaultCommitStatusUpdater) UpdateProjectResult(ctx *CommandContext, commandName CommandName, res CommandResult) error {
-	var status models.CommitStatus
-	if res.Error != nil || res.Failure != "" {
-		status = models.FailedCommitStatus
-	} else {
-		var statuses []models.CommitStatus
-		for _, p := range res.ProjectResults {
-			statuses = append(statuses, p.Status())
-		}
-		status = d.worstStatus(statuses)
+func (d *DefaultCommitStatusUpdater) UpdateCombined(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command models.CommandName) error {
+	src := fmt.Sprintf("atlantis/%s", command.String())
+	var descripWords string
+	switch status {
+	case models.PendingCommitStatus:
+		descripWords = "in progress..."
+	case models.FailedCommitStatus:
+		descripWords = "failed."
+	case models.SuccessCommitStatus:
+		descripWords = "succeeded."
 	}
-	return d.Update(ctx.BaseRepo, ctx.Pull, status, commandName)
+	descrip := fmt.Sprintf("%s %s", strings.Title(command.String()), descripWords)
+	return d.Client.UpdateStatus(repo, pull, status, src, descrip, "")
 }
 
-func (d *DefaultCommitStatusUpdater) worstStatus(ss []models.CommitStatus) models.CommitStatus {
-	for _, s := range ss {
-		if s == models.FailedCommitStatus {
-			return models.FailedCommitStatus
-		}
+func (d *DefaultCommitStatusUpdater) UpdateCombinedCount(repo models.Repo, pull models.PullRequest, status models.CommitStatus, command models.CommandName, numSuccess int, numTotal int) error {
+	src := fmt.Sprintf("atlantis/%s", command.String())
+	cmdVerb := "planned"
+	if command == models.ApplyCommand {
+		cmdVerb = "applied"
 	}
-	return models.SuccessCommitStatus
+	return d.Client.UpdateStatus(repo, pull, status, src, fmt.Sprintf("%d/%d projects %s successfully.", numSuccess, numTotal, cmdVerb), "")
+}
+
+func (d *DefaultCommitStatusUpdater) UpdateProject(ctx models.ProjectCommandContext, cmdName models.CommandName, status models.CommitStatus, url string) error {
+	projectID := ctx.ProjectName
+	if projectID == "" {
+		projectID = fmt.Sprintf("%s/%s", ctx.RepoRelDir, ctx.Workspace)
+	}
+	src := fmt.Sprintf("atlantis/%s: %s", cmdName.String(), projectID)
+	var descripWords string
+	switch status {
+	case models.PendingCommitStatus:
+		descripWords = "in progress..."
+	case models.FailedCommitStatus:
+		descripWords = "failed."
+	case models.SuccessCommitStatus:
+		descripWords = "succeeded."
+	}
+	descrip := fmt.Sprintf("%s %s", strings.Title(cmdName.String()), descripWords)
+	return d.Client.UpdateStatus(ctx.BaseRepo, ctx.Pull, status, src, descrip, url)
 }

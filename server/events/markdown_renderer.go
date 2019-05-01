@@ -16,12 +16,11 @@ package events
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
-	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 const (
@@ -32,79 +31,80 @@ const (
 	maxUnwrappedLines = 12
 )
 
-var (
-	plusDiffRegex  = regexp.MustCompile(`(?m)^  \+`)
-	tildeDiffRegex = regexp.MustCompile(`(?m)^  ~`)
-	minusDiffRegex = regexp.MustCompile(`(?m)^  -`)
-)
-
 // MarkdownRenderer renders responses as markdown.
-type MarkdownRenderer struct{}
-
-// CommonData is data that all responses have.
-type CommonData struct {
-	Command string
-	Verbose bool
-	Log     string
+type MarkdownRenderer struct {
+	// GitlabSupportsCommonMark is true if the version of GitLab we're
+	// using supports the CommonMark markdown format.
+	// If we're not configured with a GitLab client, this will be false.
+	GitlabSupportsCommonMark bool
 }
 
-// ErrData is data about an error response.
-type ErrData struct {
+// commonData is data that all responses have.
+type commonData struct {
+	Command      string
+	Verbose      bool
+	Log          string
+	PlansDeleted bool
+}
+
+// errData is data about an error response.
+type errData struct {
 	Error string
-	CommonData
+	commonData
 }
 
-// FailureData is data about a failure response.
-type FailureData struct {
+// failureData is data about a failure response.
+type failureData struct {
 	Failure string
-	CommonData
+	commonData
 }
 
-// ResultData is data about a successful response.
-type ResultData struct {
+// resultData is data about a successful response.
+type resultData struct {
 	Results []projectResultTmplData
-	CommonData
+	commonData
+}
+
+type planSuccessData struct {
+	models.PlanSuccess
+	PlanWasDeleted bool
 }
 
 type projectResultTmplData struct {
-	Workspace  string
-	RepoRelDir string
-	Rendered   string
-	// If this is an apply then this will be empty.
-	RePlanCmd string
-	// ApplyCmd is the command that users should run to apply this plan. If
-	// this is an apply then this will be empty.
-	ApplyCmd string
-	// DestroyCmd is the command that users should run to destroy this plan. If
-	// this is an apply then this will be empty.
-	DestroyCmd string
+	Workspace   string
+	RepoRelDir  string
+	ProjectName string
+	Rendered    string
 }
 
 // Render formats the data into a markdown string.
 // nolint: interfacer
-func (m *MarkdownRenderer) Render(res CommandResult, cmdName CommandName, log string, verbose bool, vcsHost models.VCSHostType) string {
+func (m *MarkdownRenderer) Render(res CommandResult, cmdName models.CommandName, log string, verbose bool, vcsHost models.VCSHostType) string {
 	commandStr := strings.Title(cmdName.String())
-	common := CommonData{commandStr, verbose, log}
+	common := commonData{
+		Command:      commandStr,
+		Verbose:      verbose,
+		Log:          log,
+		PlansDeleted: res.PlansDeleted,
+	}
 	if res.Error != nil {
-		return m.renderTemplate(unwrappedErrWithLogTmpl, ErrData{res.Error.Error(), common})
+		return m.renderTemplate(unwrappedErrWithLogTmpl, errData{res.Error.Error(), common})
 	}
 	if res.Failure != "" {
-		return m.renderTemplate(failureWithLogTmpl, FailureData{res.Failure, common})
+		return m.renderTemplate(failureWithLogTmpl, failureData{res.Failure, common})
 	}
 	return m.renderProjectResults(res.ProjectResults, common, vcsHost)
 }
 
-func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common CommonData, vcsHost models.VCSHostType) string {
+func (m *MarkdownRenderer) renderProjectResults(results []models.ProjectResult, common commonData, vcsHost models.VCSHostType) string {
 	var resultsTmplData []projectResultTmplData
 	numPlanSuccesses := 0
 
 	for _, result := range results {
 		resultData := projectResultTmplData{
-			Workspace:  result.Workspace,
-			RepoRelDir: result.RepoRelDir,
-			RePlanCmd:  "",
-			ApplyCmd:   "",
-			DestroyCmd: "",
+			Workspace:   result.Workspace,
+			RepoRelDir:  result.RepoRelDir,
+			ProjectName: result.ProjectName,
 		}
 		if result.Error != nil {
 			tmpl := unwrappedErrTmpl
@@ -127,14 +127,10 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 				Failure: result.Failure,
 			})
 		} else if result.PlanSuccess != nil {
-			result.PlanSuccess.TerraformOutput = m.fmtDiff(result.PlanSuccess.TerraformOutput)
-			resultData.RePlanCmd = result.PlanSuccess.RePlanCmd
-			resultData.ApplyCmd = result.PlanSuccess.ApplyCmd
-			resultData.DestroyCmd = result.PlanSuccess.DestroyCmd
 			if m.shouldUseWrappedTmpl(vcsHost, result.PlanSuccess.TerraformOutput) {
-				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, *result.PlanSuccess)
+				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted})
 			} else {
-				resultData.Rendered = m.renderTemplate(planSuccessUnwrappedTmpl, *result.PlanSuccess)
+				resultData.Rendered = m.renderTemplate(planSuccessUnwrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted})
 			}
 			numPlanSuccesses++
 		} else if result.ApplySuccess != "" {
@@ -143,12 +139,7 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 			} else {
 				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.ApplySuccess})
 			}
-		} else if result.DestroySuccess != "" {
-			if m.shouldUseWrappedTmpl(vcsHost, result.DestroySuccess) {
-				resultData.Rendered = m.renderTemplate(applyWrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
-			} else {
-				resultData.Rendered = m.renderTemplate(applyUnwrappedSuccessTmpl, struct{ Output string }{result.DestroySuccess})
-			}
+
 		} else {
 			resultData.Rendered = "Found no template. This is a bug!"
 		}
@@ -170,30 +161,24 @@ func (m *MarkdownRenderer) renderProjectResults(results []ProjectResult, common 
 	default:
 		return "no template matched–this is a bug"
 	}
-	return m.renderTemplate(tmpl, ResultData{resultsTmplData, common})
+	return m.renderTemplate(tmpl, resultData{resultsTmplData, common})
 }
 
 // shouldUseWrappedTmpl returns true if we should use the wrapped markdown
 // templates that collapse the output to make the comment smaller on initial
-// load.
+// load. Some VCS providers or versions of VCS providers don't support this
+// syntax.
 func (m *MarkdownRenderer) shouldUseWrappedTmpl(vcsHost models.VCSHostType, output string) bool {
 	// Bitbucket Cloud and Server don't support the folding markdown syntax.
 	if vcsHost == models.BitbucketServer || vcsHost == models.BitbucketCloud {
 		return false
 	}
 
-	return strings.Count(output, "\n") > maxUnwrappedLines
-}
+	if vcsHost == models.Gitlab && !m.GitlabSupportsCommonMark {
+		return false
+	}
 
-// fmtDiff uses regex's to remove any leading whitespace in front of the
-// terraform output so that the diff syntax highlighting works. Example:
-// "  - aws_security_group_rule.allow_all" =>
-// "- aws_security_group_rule.allow_all"
-// We do it for +, ~ and -.
-func (m *MarkdownRenderer) fmtDiff(tfOutput string) string {
-	tfOutput = plusDiffRegex.ReplaceAllString(tfOutput, "+")
-	tfOutput = tildeDiffRegex.ReplaceAllString(tfOutput, "~")
-	return minusDiffRegex.ReplaceAllString(tfOutput, "-")
+	return strings.Count(output, "\n") > maxUnwrappedLines
 }
 
 func (m *MarkdownRenderer) renderTemplate(tmpl *template.Template, data interface{}) string {
@@ -206,34 +191,34 @@ func (m *MarkdownRenderer) renderTemplate(tmpl *template.Template, data interfac
 
 // todo: refactor to remove duplication #refactor
 var singleProjectApplyTmpl = template.Must(template.New("").Parse(
-	"{{$result := index .Results 0}}Ran {{.Command}} in dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n{{$result.Rendered}}\n" + logTmpl))
+	"{{$result := index .Results 0}}Ran {{.Command}} for {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n{{$result.Rendered}}\n" + logTmpl))
 var singleProjectPlanSuccessTmpl = template.Must(template.New("").Parse(
-	"{{$result := index .Results 0}}Ran {{.Command}} in dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n{{$result.Rendered}}\n" +
+	"{{$result := index .Results 0}}Ran {{.Command}} for {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n{{$result.Rendered}}\n" +
 		"\n" +
 		"---\n" +
 		"* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `{{$result.ApplyCmd}}`" + logTmpl))
+		"    * `atlantis apply`" + logTmpl))
 var singleProjectPlanUnsuccessfulTmpl = template.Must(template.New("").Parse(
-	"{{$result := index .Results 0}}Ran {{.Command}} in dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n" +
+	"{{$result := index .Results 0}}Ran {{.Command}} for dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n" +
 		"{{$result.Rendered}}\n" + logTmpl))
 var multiProjectPlanTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
 	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
 		"{{ range $result := .Results }}" +
-		"1. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
+		"1. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{end}}\n" +
 		"{{ range $i, $result := .Results }}" +
-		"### {{add $i 1}}. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
+		"### {{add $i 1}}. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{$result.Rendered}}\n\n" +
-		"---\n{{end}}{{ if gt (len .Results) 0 }}{{$result := index .Results 0}}*  :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `{{$result.ApplyCmd}}`{{end}}" +
+		"---\n{{end}}{{ if and (gt (len .Results) 0) (not .PlansDeleted) }}* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
+		"    * `atlantis apply`{{end}}" +
 		logTmpl))
 var multiProjectApplyTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
 	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
 		"{{ range $result := .Results }}" +
-		"1. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
+		"1. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{end}}\n" +
 		"{{ range $i, $result := .Results }}" +
-		"### {{add $i 1}}. workspace: `{{$result.Workspace}}` dir: `{{$result.RepoRelDir}}`\n" +
+		"### {{add $i 1}}. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{$result.Rendered}}\n\n" +
 		"---\n{{end}}" +
 		logTmpl))
@@ -251,12 +236,11 @@ var planSuccessWrappedTmpl = template.Must(template.New("").Parse(
 
 // planNextSteps are instructions appended after successful plans as to what
 // to do next.
-var planNextSteps = "* :arrow_forward: To **apply** this plan, comment:\n" +
+var planNextSteps = "{{ if .PlanWasDeleted }}This plan was not saved because one or more projects failed and automerge requires all plans pass.{{ else }}* :arrow_forward: To **apply** this plan, comment:\n" +
 	"    * `{{.ApplyCmd}}`\n" +
-	"* :put_litter_in_its_place: To **destroy** this plan, comment:\n" +
-	"    * `{{.DestroyCmd}}`\n" +
+	"* :put_litter_in_its_place: To **delete** this plan click [here]({{.LockURL}})\n" +
 	"* :repeat: To **plan** this project again, comment:\n" +
-	"    * `{{.RePlanCmd}}`"
+	"    * `{{.RePlanCmd}}`{{end}}"
 var applyUnwrappedSuccessTmpl = template.Must(template.New("").Parse(
 	"```diff\n" +
 		"{{.Output}}\n" +

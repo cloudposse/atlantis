@@ -1,9 +1,11 @@
 package bitbucketserver
 
 const (
+	DiagnosticsPingHeader    = "diagnostics:ping"
 	PullCreatedHeader        = "pr:opened"
 	PullMergedHeader         = "pr:merged"
 	PullDeclinedHeader       = "pr:declined"
+	PullDeletedHeader        = "pr:deleted"
 	PullCommentCreatedHeader = "pr:comment:added"
 )
 
@@ -22,6 +24,7 @@ type CommonEventData struct {
 }
 
 type PullRequest struct {
+	Version   *int    `json:"version,omitempty" validate:"required"`
 	ID        *int    `json:"id,omitempty" validate:"required"`
 	FromRef   *Ref    `json:"fromRef,omitempty" validate:"required"`
 	ToRef     *Ref    `json:"toRef,omitempty" validate:"required"`
@@ -60,9 +63,12 @@ type Changes struct {
 		Path struct {
 			ToString *string `json:"toString,omitempty" validate:"required"`
 		} `json:"path,omitempty" validate:"required"`
+		SrcPath *struct {
+			ToString *string `json:"toString,omitempty"`
+		} `json:"srcPath,omitempty"`
 	} `json:"values,omitempty" validate:"required"`
-	NextPageStart *string `json:"nextPageStart,omitempty"`
-	IsLastPage    *bool   `json:"isLastPage,omitempty" validate:"required"`
+	NextPageStart *int  `json:"nextPageStart,omitempty"`
+	IsLastPage    *bool `json:"isLastPage,omitempty" validate:"required"`
 }
 
 type MergeStatus struct {

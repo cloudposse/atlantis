@@ -1,9 +1,10 @@
 package raw
 
-import "github.com/cloudposse/atlantis/server/events/yaml/valid"
+import "github.com/runatlantis/atlantis/server/events/yaml/valid"
 
+// DefaultAutoPlanWhenModified is the default element in the when_modified
+// list if none is defined.
 const DefaultAutoPlanWhenModified = "**/*.tf*"
-const DefaultAutoPlanEnabled = true
 
 type Autoplan struct {
 	WhenModified []string `yaml:"when_modified,omitempty"`
@@ -31,9 +32,10 @@ func (a Autoplan) Validate() error {
 	return nil
 }
 
+// DefaultAutoPlan returns the default autoplan config.
 func DefaultAutoPlan() valid.Autoplan {
 	return valid.Autoplan{
 		WhenModified: []string{DefaultAutoPlanWhenModified},
-		Enabled:      DefaultAutoPlanEnabled,
+		Enabled:      valid.DefaultAutoPlanEnabled,
 	}
 }

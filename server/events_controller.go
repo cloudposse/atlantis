@@ -18,15 +18,15 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/models"
-	"github.com/cloudposse/atlantis/server/events/vcs"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketserver"
-	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/google/go-github/github"
-	"github.com/lkysow/go-gitlab"
+	gitlab "github.com/lkysow/go-gitlab"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/runatlantis/atlantis/server/events/vcs"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	"github.com/runatlantis/atlantis/server/logging"
 )
 
 const githubHeader = "X-Github-Event"
@@ -57,11 +57,13 @@ type EventsController struct {
 	// request validation is done.
 	GitlabWebhookSecret  []byte
 	RepoWhitelistChecker *events.RepoWhitelistChecker
-	TeamWhitelistChecker *events.TeamWhitelistChecker
+	// SilenceWhitelistErrors controls whether we write an error comment on
+	// pull requests from non-whitelisted repos.
+	SilenceWhitelistErrors bool
 	// SupportedVCSHosts is which VCS hosts Atlantis was configured upon
 	// startup to support.
 	SupportedVCSHosts []models.VCSHostType
-	VCSClient         vcs.ClientProxy
+	VCSClient         vcs.Client
 	TestingMode       bool
 	// BitbucketWebhookSecret is the secret added to this webhook via the Bitbucket
 	// UI that identifies this call as coming from Bitbucket. If empty, no
@@ -167,6 +169,12 @@ func (e *EventsController) handleBitbucketServerPost(w http.ResponseWriter, r *h
 		e.respond(w, logging.Error, http.StatusBadRequest, "Unable to read body: %s %s=%s", err, bitbucketServerRequestIDHeader, reqID)
 		return
 	}
+	if eventType == bitbucketserver.DiagnosticsPingHeader {
+		// Specially handle the diagnostics:ping event because Bitbucket Server
+		// doesn't send the signature with this event for some reason.
+		e.respond(w, logging.Info, http.StatusOK, "Successfully received %s event %s=%s", eventType, bitbucketServerRequestIDHeader, reqID)
+		return
+	}
 	if len(e.BitbucketWebhookSecret) > 0 {
 		if err := bitbucketserver.ValidateSignature(body, sig, e.BitbucketWebhookSecret); err != nil {
 			e.respond(w, logging.Warn, http.StatusBadRequest, errors.Wrap(err, "request did not pass validation").Error())
@@ -174,7 +182,7 @@ func (e *EventsController) handleBitbucketServerPost(w http.ResponseWriter, r *h
 		}
 	}
 	switch eventType {
-	case bitbucketserver.PullCreatedHeader, bitbucketserver.PullMergedHeader, bitbucketserver.PullDeclinedHeader:
+	case bitbucketserver.PullCreatedHeader, bitbucketserver.PullMergedHeader, bitbucketserver.PullDeclinedHeader, bitbucketserver.PullDeletedHeader:
 		e.Logger.Debug("handling as pull request state changed event")
 		e.handleBitbucketServerPullRequestEvent(w, eventType, body, reqID)
 		return
@@ -322,6 +330,9 @@ func (e *EventsController) handleGitlabPost(w http.ResponseWriter, r *http.Reque
 	case gitlab.MergeEvent:
 		e.Logger.Debug("handling as pull request event")
 		e.HandleGitlabMergeRequestEvent(w, event)
+	case gitlab.CommitCommentEvent:
+		e.Logger.Debug("comments on commits are not supported, only comments on merge requests")
+		e.respond(w, logging.Debug, http.StatusOK, "Ignoring comment on commit event")
 	default:
 		e.respond(w, logging.Debug, http.StatusOK, "Ignoring unsupported event")
 	}
@@ -373,18 +384,6 @@ func (e *EventsController) handleCommentEvent(w http.ResponseWriter, baseRepo mo
 		return
 	}
 
-	// Check if the user who commented has the permissions to execute 'plan', 'apply' or destroy commands
-	ok, err := e.checkUserPermissions(baseRepo, user, parseResult.Command)
-	if err != nil {
-		e.Logger.Err("unable to comment on pull request: %s", err)
-		return
-	}
-	if !ok {
-		e.commentUserDoesNotHavePermissions(baseRepo, pullNum, user, parseResult.Command)
-		e.respond(w, logging.Warn, http.StatusForbidden, "User @%s does not have permissions to execute '%s' command", user.Username, parseResult.Command.Name.String())
-		return
-	}
-
 	e.Logger.Debug("executing command")
 	fmt.Fprintln(w, "Processing...")
 	if !e.TestingMode {
@@ -429,34 +428,14 @@ func (e *EventsController) respond(w http.ResponseWriter, lvl logging.LogLevel, 
 }
 
 // commentNotWhitelisted comments on the pull request that the repo is not
-// whitelisted.
+// whitelisted unless whitelist error comments are disabled.
 func (e *EventsController) commentNotWhitelisted(baseRepo models.Repo, pullNum int) {
+	if e.SilenceWhitelistErrors {
+		return
+	}
+
 	errMsg := "```\nError: This repo is not whitelisted for Atlantis.\n```"
 	if err := e.VCSClient.CreateComment(baseRepo, pullNum, errMsg); err != nil {
 		e.Logger.Err("unable to comment on pull request: %s", err)
 	}
-}
-
-// commentUserDoesNotHavePermissions comments on the pull request that the user
-// is not allowed to execute the command.
-func (e *EventsController) commentUserDoesNotHavePermissions(baseRepo models.Repo, pullNum int, user models.User, cmd *events.CommentCommand) {
-	errMsg := fmt.Sprintf("```\nError: User @%s does not have permissions to execute '%s' command.\n```", user.Username, cmd.Name)
-	if err := e.VCSClient.CreateComment(baseRepo, pullNum, errMsg); err != nil {
-		e.Logger.Err("unable to comment on pull request: %s", err)
-	}
-}
-
-// checkUserPermissions checks if the user has permissions to execute the command
-func (e *EventsController) checkUserPermissions(repo models.Repo, user models.User, cmd *events.CommentCommand) (bool, error) {
-	if cmd.Name == events.ApplyCommand || cmd.Name == events.PlanCommand || cmd.Name == events.DestroyCommand {
-		teams, err := e.VCSClient.GetTeamNamesForUser(repo, user)
-		if err != nil {
-			return false, err
-		}
-		ok := e.TeamWhitelistChecker.IsCommandAllowedForAnyTeam(teams, cmd.Name.String())
-		if !ok {
-			return false, nil
-		}
-	}
-	return true, nil
 }

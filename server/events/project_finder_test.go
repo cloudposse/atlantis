@@ -19,10 +19,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var noopLogger = logging.NewNoopLogger()
@@ -251,7 +251,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 
 	cases := []struct {
 		description  string
-		config       valid.Config
+		config       valid.RepoCfg
 		modified     []string
 		expProjPaths []string
 	}{
@@ -260,7 +260,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 			// If our caller is interested in autoplan enabled projects, they'll
 			// need to filter the results.
 			description: "autoplan disabled",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: ".",
@@ -276,7 +276,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: "autoplan default",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: ".",
@@ -292,7 +292,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: "parent dir modified",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: "project",
@@ -308,7 +308,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: "parent dir modified matches",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: "project1",
@@ -324,7 +324,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: "dir deleted",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: "project3",
@@ -340,7 +340,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: "multiple projects",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: ".",
@@ -370,7 +370,7 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 		},
 		{
 			description: ".tfvars file modified",
-			config: valid.Config{
+			config: valid.RepoCfg{
 				Projects: []valid.Project{
 					{
 						Dir: "project2",
@@ -387,9 +387,6 @@ func TestDefaultProjectFinder_DetermineProjectsViaConfig(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if c.description != "autoplan disabled" {
-			continue
-		}
 		t.Run(c.description, func(t *testing.T) {
 			pf := events.DefaultProjectFinder{}
 			projects, err := pf.DetermineProjectsViaConfig(logging.NewNoopLogger(), c.modified, c.config, tmpDir)

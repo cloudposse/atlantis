@@ -23,9 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
-	"github.com/cloudposse/atlantis/server/logging"
+	version "github.com/hashicorp/go-version"
+	"github.com/runatlantis/atlantis/server/logging"
+
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 // Repo is a VCS repository.
@@ -48,6 +50,12 @@ type Repo struct {
 	SanitizedCloneURL string
 	// VCSHost is where this repo is hosted.
 	VCSHost VCSHost
+}
+
+// ID returns the atlantis ID for this repo.
+// ID is in the form: {vcs hostname}/{repoFullName}.
+func (r Repo) ID() string {
+	return fmt.Sprintf("%s/%s", r.VCSHost.Hostname, r.FullName)
 }
 
 // NewRepo constructs a Repo object. repoFullName is the owner/repo form,
@@ -133,8 +141,12 @@ type PullRequest struct {
 	// URL is the url of the pull request.
 	// ex. "https://github.com/runatlantis/atlantis/pull/1"
 	URL string
-	// Branch is the name of the head branch (not the base).
-	Branch string
+	// HeadBranch is the name of the head branch (the branch that is getting
+	// merged into the base).
+	HeadBranch string
+	// BaseBranch is the name of the base branch (the branch that the pull
+	// request is getting merged into).
+	BaseBranch string
 	// Author is the username of the pull request author.
 	Author string
 	// State will be one of Open or Closed.
@@ -273,37 +285,60 @@ func (h VCSHostType) String() string {
 	return "<missing String() implementation>"
 }
 
+// ProjectCommandContext defines the context for a plan or apply stage that will
+// be executed for a project.
 type ProjectCommandContext struct {
-	// BaseRepo is the repository that the pull request will be merged into.
-	BaseRepo Repo
-	// HeadRepo is the repository that is getting merged into the BaseRepo.
-	// If the pull request branch is from the same repository then HeadRepo will
-	// be the same as BaseRepo.
-	// See https://help.github.com/articles/about-pull-request-merges/.
-	HeadRepo Repo
-	Pull     PullRequest
-	// User is the user that triggered this command.
-	User          User
-	Log           *logging.SimpleLogger
-	RepoRelDir    string
-	ProjectConfig *valid.Project
-	GlobalConfig  *valid.Config
-
-	// CommentArgs are the extra arguments appended to comment,
-	// ex. atlantis plan -- -target=resource
-	CommentArgs []string
-	Workspace   string
-	// Verbose is true when the user would like verbose output.
-	Verbose bool
-	// RePlanCmd is the command that users should run to re-plan this project.
-	// If this is an apply then this will be empty.
-	RePlanCmd string
 	// ApplyCmd is the command that users should run to apply this plan. If
 	// this is an apply then this will be empty.
 	ApplyCmd string
-	// DestroyCmd is the command that users should run to destroy this plan. If
-	// this is an apply then this will be empty.
-	DestroyCmd string
+	// ApplyRequirements is the list of requirements that must be satisfied
+	// before we will run the apply stage.
+	ApplyRequirements []string
+	// AutoplanEnabled is true if automerge is enabled for the repo that this
+	// project is in.
+	AutomergeEnabled bool
+	// AutoplanEnabled is true if autoplanning is enabled for this project.
+	AutoplanEnabled bool
+	// BaseRepo is the repository that the pull request will be merged into.
+	BaseRepo Repo
+	// CommentArgs are the extra arguments appended to comment,
+	// ex. atlantis plan -- -target=resource
+	CommentArgs []string
+	// HeadRepo is the repository that is getting merged into the BaseRepo.
+	// If the pull request branch is from the same repository then HeadRepo will
+	// be the same as BaseRepo.
+	HeadRepo Repo
+	// Log is a logger that's been set up for this context.
+	Log *logging.SimpleLogger
+	// PullMergeable is true if the pull request for this project is able to be merged.
+	PullMergeable bool
+	// Pull is the pull request we're responding to.
+	Pull PullRequest
+	// ProjectName is the name of the project set in atlantis.yaml. If there was
+	// no name this will be an empty string.
+	ProjectName string
+	// RepoConfigVersion is the version of the repo's atlantis.yaml file. If
+	// there was no file, this will be 0.
+	RepoConfigVersion int
+	// RePlanCmd is the command that users should run to re-plan this project.
+	// If this is an apply then this will be empty.
+	RePlanCmd string
+	// RepoRelDir is the directory of this project relative to the repo root.
+	RepoRelDir string
+	// Steps are the sequence of commands we need to run for this project and this
+	// stage.
+	Steps []valid.Step
+	// TerraformVersion is the version of terraform we should use when executing
+	// commands for this project. This can be set to nil in which case we will
+	// use the default Atlantis terraform version.
+	TerraformVersion *version.Version
+	// User is the user that triggered this command.
+	User User
+	// Verbose is true when the user would like verbose output.
+	Verbose bool
+	// Workspace is the Terraform workspace this project is in. It will always
+	// be set.
+	Workspace string
 }
 
 // SplitRepoFullName splits a repo full name up into its owner and repo name
@@ -317,4 +352,153 @@ func SplitRepoFullName(repoFullName string) (owner string, repo string) {
 		return "", ""
 	}
 	return repoFullName[:lastSlashIdx], repoFullName[lastSlashIdx+1:]
+}
+
+// ProjectResult is the result of executing a plan/apply for a specific project.
+type ProjectResult struct {
+	Command      CommandName
+	RepoRelDir   string
+	Workspace    string
+	Error        error
+	Failure      string
+	PlanSuccess  *PlanSuccess
+	ApplySuccess string
+	ProjectName  string
+}
+
+// CommitStatus returns the vcs commit status of this project result.
+func (p ProjectResult) CommitStatus() CommitStatus {
+	if p.Error != nil {
+		return FailedCommitStatus
+	}
+	if p.Failure != "" {
+		return FailedCommitStatus
+	}
+	return SuccessCommitStatus
+}
+
+// PlanStatus returns the plan status.
+func (p ProjectResult) PlanStatus() ProjectPlanStatus {
+	switch p.Command {
+
+	case PlanCommand:
+		if p.Error != nil {
+			return ErroredPlanStatus
+		} else if p.Failure != "" {
+			return ErroredPlanStatus
+		}
+		return PlannedPlanStatus
+
+	case ApplyCommand:
+		if p.Error != nil {
+			return ErroredApplyStatus
+		} else if p.Failure != "" {
+			return ErroredApplyStatus
+		}
+		return AppliedPlanStatus
+	}
+
+	panic("PlanStatus() missing a combination")
+}
+
+// IsSuccessful returns true if this project result had no errors.
+func (p ProjectResult) IsSuccessful() bool {
+	return p.PlanSuccess != nil || p.ApplySuccess != ""
+}
+
+// PlanSuccess is the result of a successful plan.
+type PlanSuccess struct {
+	// TerraformOutput is the output from Terraform of running plan.
+	TerraformOutput string
+	// LockURL is the full URL to the lock held by this plan.
+	LockURL string
+	// RePlanCmd is the command that users should run to re-plan this project.
+	RePlanCmd string
+	// ApplyCmd is the command that users should run to apply this plan.
+	ApplyCmd string
+}
+
+// PullStatus is the current status of a pull request that is in progress.
+type PullStatus struct {
+	// Projects are the projects that have been modified in this pull request.
+	Projects []ProjectStatus
+	// Pull is the original pull request model.
+	Pull PullRequest
+}
+
+// StatusCount returns the number of projects that have status.
+func (p PullStatus) StatusCount(status ProjectPlanStatus) int {
+	c := 0
+	for _, pr := range p.Projects {
+		if pr.Status == status {
+			c++
+		}
+	}
+	return c
+}
+
+// ProjectStatus is the status of a specific project.
+type ProjectStatus struct {
+	Workspace   string
+	RepoRelDir  string
+	ProjectName string
+	// Status is the status of where this project is at in the planning cycle.
+	Status ProjectPlanStatus
+}
+
+// ProjectPlanStatus is the status of where this project is at in the planning
+// cycle.
+type ProjectPlanStatus int
+
+const (
+	// ErroredPlanStatus means that this plan has an error or the apply has an
+	// error.
+	ErroredPlanStatus ProjectPlanStatus = iota
+	// PlannedPlanStatus means that a plan has been successfully generated but
+	// not yet applied.
+	PlannedPlanStatus
+	// ErrorApplyStatus means that a plan has been generated but there was an
+	// error while applying it.
+	ErroredApplyStatus
+	// AppliedPlanStatus means that a plan has been generated and applied
+	// successfully.
+	AppliedPlanStatus
+)
+
+// String returns a string representation of the status.
+func (p ProjectPlanStatus) String() string {
+	switch p {
+	case ErroredPlanStatus:
+		return "plan_errored"
+	case PlannedPlanStatus:
+		return "planned"
+	case ErroredApplyStatus:
+		return "apply_errored"
+	case AppliedPlanStatus:
+		return "applied"
+	default:
+		panic("missing String() impl for ProjectPlanStatus")
+	}
+}
+
+// CommandName is which command to run.
+type CommandName int
+
+const (
+	// ApplyCommand is a command to run terraform apply.
+	ApplyCommand CommandName = iota
+	// PlanCommand is a command to run terraform plan.
+	PlanCommand
+	// Adding more? Don't forget to update String() below
+)
+
+// String returns the string representation of c.
+func (c CommandName) String() string {
+	switch c {
+	case ApplyCommand:
+		return "apply"
+	case PlanCommand:
+		return "plan"
+	}
+	return ""
 }
