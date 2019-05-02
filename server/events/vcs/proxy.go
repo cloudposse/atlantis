@@ -71,3 +71,7 @@ func (d *ClientProxy) UpdateStatus(repo models.Repo, pull models.PullRequest, st
 func (d *ClientProxy) MergePull(pull models.PullRequest) error {
 	return d.clients[pull.BaseRepo.VCSHost.Type].MergePull(pull)
 }
+
+func (d *ClientProxy) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
+	return d.clients[repo.VCSHost.Type].GetTeamNamesForUser(repo, user)
+}
