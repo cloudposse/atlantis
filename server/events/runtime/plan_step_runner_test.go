@@ -8,19 +8,19 @@ import (
 	"strings"
 	"testing"
 
+	mocks2 "github.com/cloudposse/atlantis/server/events/mocks"
+	"github.com/cloudposse/atlantis/server/events/terraform"
 	version "github.com/hashicorp/go-version"
-	mocks2 "github.com/runatlantis/atlantis/server/events/mocks"
-	"github.com/runatlantis/atlantis/server/events/terraform"
 
+	"github.com/cloudposse/atlantis/server/events/mocks/matchers"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	"github.com/cloudposse/atlantis/server/events/terraform/mocks"
+	matchers2 "github.com/cloudposse/atlantis/server/events/terraform/mocks/matchers"
+	"github.com/cloudposse/atlantis/server/logging"
+	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/mocks/matchers"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	"github.com/runatlantis/atlantis/server/events/terraform/mocks"
-	matchers2 "github.com/runatlantis/atlantis/server/events/terraform/mocks/matchers"
-	"github.com/runatlantis/atlantis/server/logging"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestRun_NoWorkspaceIn08(t *testing.T) {

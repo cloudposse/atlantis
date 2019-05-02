@@ -16,9 +16,9 @@ package events
 import (
 	"fmt"
 
-	"github.com/runatlantis/atlantis/server/events/locking"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/server/events/locking"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/logging"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_project_lock.go ProjectLocker

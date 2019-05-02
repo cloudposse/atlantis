@@ -19,11 +19,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/runatlantis/atlantis/server/events/vcs/common"
+	"github.com/cloudposse/atlantis/server/events/vcs/common"
 
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/google/go-github/github"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // maxCommentLength is the maximum number of chars allowed in a single comment

@@ -15,12 +15,12 @@
 package main
 
 import (
-	"github.com/runatlantis/atlantis/cmd"
-	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/cmd"
+	"github.com/cloudposse/atlantis/server/logging"
 	"github.com/spf13/viper"
 )
 
-const atlantisVersion = "0.7.1"
+const atlantisVersion = "0.8.0"
 
 func main() {
 	v := viper.New()

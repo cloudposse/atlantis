@@ -14,7 +14,7 @@
 package vcs
 
 import (
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 // ClientProxy proxies calls to the correct VCS client depending on which

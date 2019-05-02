@@ -2,8 +2,8 @@
 package matchers
 
 import (
+	"github.com/cloudposse/atlantis/server/events/models"
 	"github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events/models"
 	"reflect"
 )
 

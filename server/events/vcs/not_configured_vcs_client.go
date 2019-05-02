@@ -16,7 +16,7 @@ package vcs
 import (
 	"fmt"
 
-	"github.com/runatlantis/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/models"
 )
 
 // NotConfiguredVCSClient is used as a placeholder when Atlantis isn't configured

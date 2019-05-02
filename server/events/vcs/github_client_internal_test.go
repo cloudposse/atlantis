@@ -16,7 +16,7 @@ package vcs
 import (
 	"testing"
 
-	. "github.com/runatlantis/atlantis/testing"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 // If the hostname is github.com, should use normal BaseURL.

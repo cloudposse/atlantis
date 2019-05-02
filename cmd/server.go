@@ -20,12 +20,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server"
+	"github.com/cloudposse/atlantis/server/events/vcs/bitbucketcloud"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	"github.com/cloudposse/atlantis/server/logging"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server"
-	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	"github.com/runatlantis/atlantis/server/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

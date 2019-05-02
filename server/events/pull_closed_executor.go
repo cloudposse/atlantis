@@ -20,14 +20,14 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/runatlantis/atlantis/server/events/db"
+	"github.com/cloudposse/atlantis/server/events/db"
 
-	"github.com/runatlantis/atlantis/server/logging"
+	"github.com/cloudposse/atlantis/server/logging"
 
+	"github.com/cloudposse/atlantis/server/events/locking"
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/vcs"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/locking"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/vcs"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_pull_cleaner.go PullCleaner

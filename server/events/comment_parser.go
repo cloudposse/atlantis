@@ -21,9 +21,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/yaml"
 	shlex "github.com/flynn-archive/go-shlex"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/yaml"
 	"github.com/spf13/pflag"
 )
 

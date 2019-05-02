@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/matchers"
+	"github.com/cloudposse/atlantis/server/events/models"
+	vcsmocks "github.com/cloudposse/atlantis/server/events/vcs/mocks"
+	"github.com/cloudposse/atlantis/server/events/yaml"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	. "github.com/cloudposse/atlantis/testing"
 	version "github.com/hashicorp/go-version"
 	. "github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events/matchers"
-	"github.com/runatlantis/atlantis/server/events/models"
-	vcsmocks "github.com/runatlantis/atlantis/server/events/vcs/mocks"
-	"github.com/runatlantis/atlantis/server/events/yaml"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 // Test different permutations of global and repo config.

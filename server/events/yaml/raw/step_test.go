@@ -3,9 +3,9 @@ package raw_test
 import (
 	"testing"
 
-	"github.com/runatlantis/atlantis/server/events/yaml/raw"
-	"github.com/runatlantis/atlantis/server/events/yaml/valid"
-	. "github.com/runatlantis/atlantis/testing"
+	"github.com/cloudposse/atlantis/server/events/yaml/raw"
+	"github.com/cloudposse/atlantis/server/events/yaml/valid"
+	. "github.com/cloudposse/atlantis/testing"
 	yaml "gopkg.in/yaml.v2"
 )
 

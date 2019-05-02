@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/runatlantis/atlantis/server/events"
-	"github.com/runatlantis/atlantis/server/events/models"
-	. "github.com/runatlantis/atlantis/testing"
+	"github.com/cloudposse/atlantis/server/events"
+	"github.com/cloudposse/atlantis/server/events/models"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 func TestCommandResult_HasErrors(t *testing.T) {

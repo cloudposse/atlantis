@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/terraform"
+	"github.com/cloudposse/atlantis/server/logging"
 	version "github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/terraform"
-	"github.com/runatlantis/atlantis/server/logging"
 )
 
 const (

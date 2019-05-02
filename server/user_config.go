@@ -1,6 +1,6 @@
 package server
 
-import "github.com/runatlantis/atlantis/server/logging"
+import "github.com/cloudposse/atlantis/server/logging"
 
 // UserConfig holds config values passed in by the user.
 // The mapstructure tags correspond to flags in cmd/server.go and are used when

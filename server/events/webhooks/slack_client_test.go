@@ -18,13 +18,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cloudposse/atlantis/server/events/models"
+	"github.com/cloudposse/atlantis/server/events/webhooks"
+	"github.com/cloudposse/atlantis/server/events/webhooks/mocks"
 	"github.com/nlopes/slack"
-	"github.com/runatlantis/atlantis/server/events/models"
-	"github.com/runatlantis/atlantis/server/events/webhooks"
-	"github.com/runatlantis/atlantis/server/events/webhooks/mocks"
 
+	. "github.com/cloudposse/atlantis/testing"
 	. "github.com/petergtz/pegomock"
-	. "github.com/runatlantis/atlantis/testing"
 )
 
 var underlying *mocks.MockUnderlyingSlackClient

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/runatlantis/atlantis/server/events/runtime"
-	. "github.com/runatlantis/atlantis/testing"
+	"github.com/cloudposse/atlantis/server/events/runtime"
+	. "github.com/cloudposse/atlantis/testing"
 )
 
 func TestGetPlanFilename(t *testing.T) {

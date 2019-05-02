@@ -4,8 +4,8 @@
 package mocks
 
 import (
+	logging "github.com/cloudposse/atlantis/server/logging"
 	pegomock "github.com/petergtz/pegomock"
-	logging "github.com/runatlantis/atlantis/server/logging"
 	log "log"
 	"reflect"
 	"time"
