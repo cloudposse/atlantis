@@ -19,14 +19,14 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/vcs/common"
+	"github.com/runatlantis/atlantis/server/events/vcs/common"
 
-	"github.com/cloudposse/atlantis/server/logging"
 	version "github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/logging"
 
-	"github.com/cloudposse/atlantis/server/events/models"
 	gitlab "github.com/lkysow/go-gitlab"
+	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 type GitlabClient struct {

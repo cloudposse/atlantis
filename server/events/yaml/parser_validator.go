@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudposse/atlantis/server/events/yaml/raw"
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	shlex "github.com/flynn-archive/go-shlex"
 	validation "github.com/go-ozzo/ozzo-validation"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/yaml/raw"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 	yaml "gopkg.in/yaml.v2"
 )
 

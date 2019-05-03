@@ -22,13 +22,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudposse/atlantis/cmd"
-	"github.com/cloudposse/atlantis/server/events/terraform"
-	"github.com/cloudposse/atlantis/server/events/terraform/mocks"
-	. "github.com/cloudposse/atlantis/testing"
 	version "github.com/hashicorp/go-version"
 	"github.com/petergtz/pegomock"
 	. "github.com/petergtz/pegomock"
+	"github.com/runatlantis/atlantis/cmd"
+	"github.com/runatlantis/atlantis/server/events/terraform"
+	"github.com/runatlantis/atlantis/server/events/terraform/mocks"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestMustConstraint_PancisOnBadConstraint(t *testing.T) {

@@ -1,8 +1,8 @@
 package raw
 
 import (
-	"github.com/cloudposse/atlantis/server/events/yaml/valid"
 	validation "github.com/go-ozzo/ozzo-validation"
+	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 )
 
 type Workflow struct {

@@ -3,7 +3,7 @@ package runtime
 import (
 	"testing"
 
-	. "github.com/cloudposse/atlantis/testing"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestCleanRemoteOpOutput(t *testing.T) {

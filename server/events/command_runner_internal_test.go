@@ -3,8 +3,8 @@ package events
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestUpdateCommitStatus(t *testing.T) {

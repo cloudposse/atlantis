@@ -19,12 +19,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudposse/atlantis/server/events/db"
+	"github.com/runatlantis/atlantis/server/events/db"
 
 	"github.com/boltdb/bolt"
-	"github.com/cloudposse/atlantis/server/events/models"
-	. "github.com/cloudposse/atlantis/testing"
 	"github.com/pkg/errors"
+	"github.com/runatlantis/atlantis/server/events/models"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 var lockBucket = "bucket"

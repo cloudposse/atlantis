@@ -3,9 +3,9 @@ package server_test
 import (
 	"testing"
 
-	"github.com/cloudposse/atlantis/server"
-	"github.com/cloudposse/atlantis/server/logging"
-	. "github.com/cloudposse/atlantis/testing"
+	"github.com/runatlantis/atlantis/server"
+	"github.com/runatlantis/atlantis/server/logging"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 func TestUserConfig_ToLogLevel(t *testing.T) {

@@ -17,9 +17,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cloudposse/atlantis/server/events/vcs/common"
+	"github.com/runatlantis/atlantis/server/events/vcs/common"
 
-	. "github.com/cloudposse/atlantis/testing"
+	. "github.com/runatlantis/atlantis/testing"
 )
 
 // If under the maximum number of chars, we shouldn't split the comments.
