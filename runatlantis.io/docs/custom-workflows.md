@@ -318,13 +318,17 @@ Or a custom command
   * `HEAD_REPO_OWNER` - Owner of the repository that is getting merged into the base repository, ex. `acme-corp`.
   * `HEAD_BRANCH_NAME` - Name of the head branch of the pull request (the branch that is getting merged into the base)
   * `BASE_BRANCH_NAME` - Name of the base branch of the pull request (the branch that the pull request is getting merged into)
+  * `PROJECT_NAME` - Name of the project configured in `atlantis.yaml`. If no project name is configured this will be an empty string.
   * `PULL_NUM` - Pull request number or ID, ex. `2`.
   * `PULL_AUTHOR` - Username of the pull request author, ex. `acme-user`.
   * `USER_NAME` - Username of the VCS user running command, ex. `acme-user`. During an autoplan, the user will be the Atlantis API user, ex. `atlantis`.
+  * `COMMENT_ARGS` - Any additional flags passed in the comment on the pull request separated by commas, ex. `atlantis plan -- arg1 arg2` will result in `COMMENT_ARGS=arg1,arg2`.
 * A custom command will only terminate if all output file descriptors are closed.
 Therefore a custom command can only be sent to the background (e.g. for an SSH tunnel during
 the terraform run) when its output is redirected to a different location. For example, Atlantis
 will execute a custom script containing the following code to create a SSH tunnel correctly: 
 `ssh -f -M -S /tmp/ssh_tunnel -L 3306:database:3306 -N bastion 1>/dev/null 2>&1`. Without
 the redirect, the script would block the Atlantis workflow.
+* If a workflow step returns a non-zero exit code, the workflow will stop. 
 :::
+

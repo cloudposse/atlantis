@@ -2,10 +2,10 @@
 package matchers
 
 import (
-	"github.com/petergtz/pegomock"
 	"reflect"
-
-	models "github.com/runatlantis/atlantis/server/events/models"
+	"github.com/petergtz/pegomock"
+	
+models "github.com/runatlantis/atlantis/server/events/models"
 )
 
 func AnyMapOfStringToModelsProjectLock() map[string]models.ProjectLock {

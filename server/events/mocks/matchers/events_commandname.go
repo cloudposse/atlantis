@@ -2,9 +2,9 @@
 package matchers
 
 import (
-	"github.com/petergtz/pegomock"
-	"github.com/runatlantis/atlantis/server/events/models"
 	"reflect"
+	"github.com/petergtz/pegomock"
+	events "github.com/runatlantis/atlantis/server/events"
 )
 
 func AnyEventsCommandName() models.CommandName {

@@ -5,14 +5,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
-	version "github.com/hashicorp/go-version"
+	"github.com/hashicorp/go-version"
 	"github.com/runatlantis/atlantis/server/events/models"
 )
 
 // RunStepRunner runs custom commands.
 type RunStepRunner struct {
 	DefaultTFVersion *version.Version
+	// TerraformBinDir is the directory where Atlantis downloads Terraform binaries.
+	TerraformBinDir string
 }
 
 func (r *RunStepRunner) Run(ctx models.ProjectCommandContext, command string, path string) (string, error) {
@@ -28,10 +31,12 @@ func (r *RunStepRunner) Run(ctx models.ProjectCommandContext, command string, pa
 		"BASE_BRANCH_NAME":           ctx.Pull.BaseBranch,
 		"BASE_REPO_NAME":             ctx.BaseRepo.Name,
 		"BASE_REPO_OWNER":            ctx.BaseRepo.Owner,
+		"COMMENT_ARGS":               strings.Join(ctx.EscapedCommentArgs, ","),
 		"DIR":                        path,
 		"HEAD_BRANCH_NAME":           ctx.Pull.HeadBranch,
 		"HEAD_REPO_NAME":             ctx.HeadRepo.Name,
 		"HEAD_REPO_OWNER":            ctx.HeadRepo.Owner,
+		"PATH":                       fmt.Sprintf("%s:%s", os.Getenv("PATH"), r.TerraformBinDir),
 		"PLANFILE":                   filepath.Join(path, GetPlanFilename(ctx.Workspace, ctx.ProjectName)),
 		"PROJECT_NAME":               ctx.ProjectName,
 		"PULL_AUTHOR":                ctx.Pull.Author,
@@ -50,7 +55,7 @@ func (r *RunStepRunner) Run(ctx models.ProjectCommandContext, command string, pa
 	if err != nil {
 		err = fmt.Errorf("%s: running %q in %q: \n%s", err, command, path, out)
 		ctx.Log.Debug("error: %s", err)
-		return string(out), err
+		return "", err
 	}
 	ctx.Log.Info("successfully ran %q in %q", command, path)
 	return string(out), nil

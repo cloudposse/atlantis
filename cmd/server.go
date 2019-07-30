@@ -48,6 +48,7 @@ const (
 	CheckoutStrategyFlag       = "checkout-strategy"
 	DataDirFlag                = "data-dir"
 	DefaultTFVersionFlag       = "default-tf-version"
+	DisableApplyAllFlag        = "disable-apply-all"
 	GHHostnameFlag             = "gh-hostname"
 	GHTeamWhitelistFlag        = "gh-team-whitelist"
 	GHTokenFlag                = "gh-token"
@@ -68,9 +69,11 @@ const (
 	SlackTokenFlag             = "slack-token"
 	SSLCertFileFlag            = "ssl-cert-file"
 	SSLKeyFileFlag             = "ssl-key-file"
+	TFEHostnameFlag            = "tfe-hostname"
 	TFETokenFlag               = "tfe-token"
 
 	// Flag defaults.
+	// NOTE: Must manually set these as defaults in the setDefaults function.
 	DefaultCheckoutStrategy = "branch"
 	DefaultBitbucketBaseURL = bitbucketcloud.BaseURL
 	DefaultDataDir          = "~/.atlantis"
@@ -79,6 +82,7 @@ const (
 	DefaultGitlabHostname   = "gitlab.com"
 	DefaultLogLevel         = "info"
 	DefaultPort             = 4141
+	DefaultTFEHostname      = "app.terraform.io"
 )
 
 var stringFlags = map[string]stringFlag{
@@ -184,9 +188,13 @@ var stringFlags = map[string]stringFlag{
 	SSLKeyFileFlag: {
 		description: fmt.Sprintf("File containing x509 private key matching --%s.", SSLCertFileFlag),
 	},
+	TFEHostnameFlag: {
+		description:  "Hostname of your Terraform Enterprise installation. If using Terraform Cloud no need to set.",
+		defaultValue: DefaultTFEHostname,
+	},
 	TFETokenFlag: {
-		description: "API token for Terraform Enterprise. This will be used to generate a ~/.terraformrc file." +
-			" Only set if using TFE as a backend." +
+		description: "API token for Terraform Cloud/Enterprise. This will be used to generate a ~/.terraformrc file." +
+			" Only set if using TFC/E as a remote backend." +
 			" Should be specified via the ATLANTIS_TFE_TOKEN environment variable for security.",
 	},
 	DefaultTFVersionFlag: {
@@ -209,6 +217,10 @@ var boolFlags = map[string]boolFlag{
 	},
 	AutomergeFlag: {
 		description:  "Automatically merge pull requests when all plans are successfully applied.",
+		defaultValue: false,
+	},
+	DisableApplyAllFlag: {
+		description:  "Disable \"atlantis apply\" command so a specific project/workspace/directory has to be specified for applies.",
 		defaultValue: false,
 	},
 	RequireApprovalFlag: {
@@ -423,8 +435,8 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	if c.Port == 0 {
 		c.Port = DefaultPort
 	}
-	if c.GithubTeamWhitelist == "" {
-		c.GithubTeamWhitelist = DefaultGHTeamWhitelist
+	if c.TFEHostname == "" {
+		c.TFEHostname = DefaultTFEHostname
 	}
 }
 
@@ -492,6 +504,10 @@ func (s *ServerCmd) validate(userConfig server.UserConfig) error {
 		if strings.Contains(token, "\n") {
 			s.Logger.Warn("--%s contains a newline which is usually unintentional", name)
 		}
+	}
+
+	if userConfig.TFEHostname != DefaultTFEHostname && userConfig.TFEToken == "" {
+		return fmt.Errorf("if setting --%s, must set --%s", TFEHostnameFlag, TFETokenFlag)
 	}
 
 	return nil

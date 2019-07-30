@@ -2,9 +2,9 @@
 package matchers
 
 import (
+	"reflect"
 	"github.com/petergtz/pegomock"
 	webhooks "github.com/runatlantis/atlantis/server/events/webhooks"
-	"reflect"
 )
 
 func AnyWebhooksApplyResult() webhooks.ApplyResult {

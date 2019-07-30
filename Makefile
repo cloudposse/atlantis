@@ -17,6 +17,10 @@ export DOCKER_BUILD_FLAGS =
 
 .PHONY: test
 
+.DEFAULT_GOAL := help
+help: ## List targets & descriptions
+	@cat Makefile* | grep -E '^[a-zA-Z_-]+:.*?## .*$$' | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
 id: ## Output BUILD_ID being used
 	@echo $(BUILD_ID)
 
@@ -36,12 +40,12 @@ build-service: ## Build the main Go service
 go-generate: ## Run go generate in all packages
 	go generate $(PKG)
 
-#regen-mocks: ## Delete all mocks and matchers and then run go generate to regen them. This doesn't work anymore.
-#find . -type f | grep mocks/mock_ | grep -v vendor | xargs rm
-#find . -type f | grep mocks/matchers | grep -v vendor | xargs rm
-#@# not using $(PKG) here because that it includes directories that have now
-#@# been deleted, causing go generate to fail.
-#echo "this doesn't work anymore: go generate \$\$(go list ./... | grep -v e2e | grep -v vendor | grep -v static)"
+regen-mocks: ## Delete all mocks and matchers and then run go generate to regen them.
+	find . -type f | grep mocks/mock_ | grep -v vendor | xargs rm
+	find . -type f | grep mocks/matchers | grep -v vendor | xargs rm
+	@# not using $(PKG) here because that it includes directories that have now
+	@# been deleted, causing go generate to fail.
+	go list ./... | grep -v e2e | grep -v vendor | grep -v static | xargs go generate
 
 test: ## Run tests
 	@go test -short $(PKG)
@@ -51,11 +55,11 @@ test-all: ## Run tests including integration
 
 test-coverage:
 	@mkdir -p .cover
-	@go test -coverpkg $(PKG_COMMAS) -coverprofile .cover/cover.out $(PKG)
+	@go test -covermode atomic -coverprofile .cover/cover.out $(PKG)
 
 test-coverage-html:
 	@mkdir -p .cover
-	@go test -coverpkg $(PKG_COMMAS) -coverprofile .cover/cover.out $(PKG)
+	@go test -covermode atomic -coverpkg $(PKG_COMMAS) -coverprofile .cover/cover.out $(PKG)
 	go tool cover -html .cover/cover.out
 
 dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
@@ -83,7 +87,7 @@ check-gometalint: gometalint-install gometalint
 
 check-fmt: ## Fail if not formatted
 	go get golang.org/x/tools/cmd/goimports
-	goimports -d $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/static/bindata_assetfs.go" ! -path "**/mocks/*")
+	if [[ $$(goimports -l $$(find . -type f -name '*.go' ! -path "./vendor/*" ! -path "./server/static/bindata_assetfs.go" ! -path "**/mocks/*")) ]]; then exit 1; fi
 
 end-to-end-deps: ## Install e2e dependencies
 	./scripts/e2e-deps.sh

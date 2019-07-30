@@ -2,9 +2,9 @@
 package matchers
 
 import (
+	"reflect"
 	"github.com/petergtz/pegomock"
 	http "net/http"
-	"reflect"
 )
 
 func AnyPtrToHttpRequest() *http.Request {

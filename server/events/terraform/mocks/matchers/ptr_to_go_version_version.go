@@ -2,9 +2,9 @@
 package matchers
 
 import (
-	go_version "github.com/hashicorp/go-version"
-	"github.com/petergtz/pegomock"
 	"reflect"
+	"github.com/petergtz/pegomock"
+	go_version "github.com/hashicorp/go-version"
 )
 
 func AnyPtrToGoVersionVersion() *go_version.Version {
