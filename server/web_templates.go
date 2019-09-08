@@ -73,7 +73,7 @@ var indexTemplate = template.Must(template.New("index.html.tmpl").Parse(`
 <body>
 <div class="container">
   <section class="header">
-    <a title="atlantis" href="{{ .CleanedBasePath }}/"><img src="{{ .CleanedBasePath }}/static/images/atlantis-icon.png"/></a>
+    <a title="atlantis" href="{{ .CleanedBasePath }}/"><img src="{{ .CleanedBasePath }}/static/images/atlantis-icon_512.png" height="15vw" width="auto" max-height="240px"/></a>
     <p class="title-heading">atlantis</p>
     <p class="js-discard-success"><strong>Plan discarded and unlocked!</strong></p>
   </section>
