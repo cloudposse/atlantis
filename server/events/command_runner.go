@@ -16,14 +16,14 @@ package events
 import (
 	"fmt"
 
-	"github.com/google/go-github/github"
-	gitlab "github.com/lkysow/go-gitlab"
+	"github.com/google/go-github/v28/github"
 	"github.com/pkg/errors"
 	"github.com/runatlantis/atlantis/server/events/db"
 	"github.com/runatlantis/atlantis/server/events/models"
 	"github.com/runatlantis/atlantis/server/events/vcs"
 	"github.com/runatlantis/atlantis/server/logging"
 	"github.com/runatlantis/atlantis/server/recovery"
+	gitlab "github.com/xanzy/go-gitlab"
 )
 
 //go:generate pegomock generate -m --use-experimental-model-gen --package mocks -o mocks/mock_command_runner.go CommandRunner
@@ -59,6 +59,7 @@ type DefaultCommandRunner struct {
 	GithubPullGetter         GithubPullGetter
 	GitlabMergeRequestGetter GitlabMergeRequestGetter
 	CommitStatusUpdater      CommitStatusUpdater
+	DisableApplyAll          bool
 	EventParser              EventParsing
 	MarkdownRenderer         *MarkdownRenderer
 	Logger                   logging.SimpleLogging
@@ -140,6 +141,14 @@ func (c *DefaultCommandRunner) RunAutoplanCommand(baseRepo models.Repo, headRepo
 func (c *DefaultCommandRunner) RunCommentCommand(baseRepo models.Repo, maybeHeadRepo *models.Repo, maybePull *models.PullRequest, user models.User, pullNum int, cmd *CommentCommand) {
 	log := c.buildLogger(baseRepo.FullName, pullNum)
 	defer c.logPanics(baseRepo, pullNum, log)
+
+	if c.DisableApplyAll && cmd.Name == models.ApplyCommand && !cmd.IsForSpecificProject() {
+		log.Info("ignoring apply command without flags since apply all is disabled")
+		if err := c.VCSClient.CreateComment(baseRepo, pullNum, applyAllDisabledComment); err != nil {
+			log.Err("unable to comment on pull request: %s", err)
+		}
+		return
+	}
 
 	var headRepo models.Repo
 	if maybeHeadRepo != nil {
@@ -435,3 +444,8 @@ func (c *DefaultCommandRunner) automergeEnabled(ctx *CommandContext, projectCmds
 // automergeComment is the comment that gets posted when Atlantis automatically
 // merges the PR.
 var automergeComment = `Automatically merging because all plans have been successfully applied.`
+
+// applyAllDisabledComment is posted when apply all commands (i.e. "atlantis apply")
+// are disabled and an apply all command is issued.
+var applyAllDisabledComment = "**Error:** Running `atlantis apply` without flags is disabled." +
+	" You must specify which project to apply via the `-d <dir>`, `-w <workspace>` or `-p <project name>` flags."

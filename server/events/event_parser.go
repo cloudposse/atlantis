@@ -19,12 +19,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/google/go-github/github"
-	gitlab "github.com/lkysow/go-gitlab"
+	"github.com/google/go-github/v28/github"
 	"github.com/pkg/errors"
 	"github.com/runatlantis/atlantis/server/events/models"
 	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketcloud"
 	"github.com/runatlantis/atlantis/server/events/vcs/bitbucketserver"
+	gitlab "github.com/xanzy/go-gitlab"
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
@@ -288,7 +288,7 @@ func (e *EventParser) parseCommonBitbucketCloudEventData(event bitbucketcloud.Co
 		prState = models.ClosedPullState
 	case "SUPERSEDED":
 		prState = models.ClosedPullState
-	case "DECLINE":
+	case "DECLINED":
 		prState = models.ClosedPullState
 	default:
 		err = fmt.Errorf("unable to determine pull request state from %q–this is a bug", *event.PullRequest.State)

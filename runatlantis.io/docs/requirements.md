@@ -19,7 +19,7 @@ statefile back to version control.
 
 :::tip
 If you're looking for an easy remote state solution, check out [free remote state](https://app.terraform.io/signup)
-storage from Terraform Enterprise. This is fully supported by Atlantis.
+storage from Terraform Cloud. This is fully supported by Atlantis.
 :::
 
 ## Repository Structure
@@ -55,7 +55,7 @@ Atlantis supports any Terraform repository structure, for example:
         └── ...
 ```
 With modules, if you want `project1` automatically planned when `module1` is modified
-you need to create an `atlantis.yaml` file. See [atlantis.yaml Use Cases](repo-level-atlantis-yaml.html#configuring-autoplanning) for more details.
+you need to create an `atlantis.yaml` file. See [atlantis.yaml Use Cases](repo-level-atlantis-yaml.html#configuring-planning) for more details.
 
 ###  Terraform Workspaces
 *See [Terraform's docs](https://www.terraform.io/docs/state/workspaces.html) if you are unfamiliar with workspaces.*

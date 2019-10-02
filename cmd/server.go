@@ -48,8 +48,8 @@ const (
 	CheckoutStrategyFlag       = "checkout-strategy"
 	DataDirFlag                = "data-dir"
 	DefaultTFVersionFlag       = "default-tf-version"
+	DisableApplyAllFlag        = "disable-apply-all"
 	GHHostnameFlag             = "gh-hostname"
-	GHTeamWhitelistFlag        = "gh-team-whitelist"
 	GHTokenFlag                = "gh-token"
 	GHUserFlag                 = "gh-user"
 	GHWebhookSecretFlag        = "gh-webhook-secret" // nolint: gosec
@@ -68,17 +68,20 @@ const (
 	SlackTokenFlag             = "slack-token"
 	SSLCertFileFlag            = "ssl-cert-file"
 	SSLKeyFileFlag             = "ssl-key-file"
+	TFEHostnameFlag            = "tfe-hostname"
 	TFETokenFlag               = "tfe-token"
+	WriteGitCredsFlag          = "write-git-creds"
 
 	// Flag defaults.
+	// NOTE: Must manually set these as defaults in the setDefaults function.
 	DefaultCheckoutStrategy = "branch"
 	DefaultBitbucketBaseURL = bitbucketcloud.BaseURL
 	DefaultDataDir          = "~/.atlantis"
 	DefaultGHHostname       = "github.com"
-	DefaultGHTeamWhitelist  = "*:*"
 	DefaultGitlabHostname   = "gitlab.com"
 	DefaultLogLevel         = "info"
 	DefaultPort             = 4141
+	DefaultTFEHostname      = "app.terraform.io"
 )
 
 var stringFlags = map[string]stringFlag{
@@ -122,14 +125,6 @@ var stringFlags = map[string]stringFlag{
 	GHHostnameFlag: {
 		description:  "Hostname of your Github Enterprise installation. If using github.com, no need to set.",
 		defaultValue: DefaultGHHostname,
-	},
-	GHTeamWhitelistFlag: {
-		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that the members of a particular team are allowed to perform. " +
-			"The format is {team}:{command},{team}:{command}, ex. dev:plan,ops:apply,devops:*. " +
-			"This example means to give the users from the 'dev' GitHub team the permissions to execute the 'plan' command, give the 'ops' team the permissions to execute the 'apply' command, " +
-			"and allow the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) will be used and the default behavior will be to not check permissions " +
-			"and to allow users from any team to perform any operation.",
-		defaultValue: DefaultGHTeamWhitelist,
 	},
 	GHUserFlag: {
 		description: "GitHub username of API user.",
@@ -184,9 +179,13 @@ var stringFlags = map[string]stringFlag{
 	SSLKeyFileFlag: {
 		description: fmt.Sprintf("File containing x509 private key matching --%s.", SSLCertFileFlag),
 	},
+	TFEHostnameFlag: {
+		description:  "Hostname of your Terraform Enterprise installation. If using Terraform Cloud no need to set.",
+		defaultValue: DefaultTFEHostname,
+	},
 	TFETokenFlag: {
-		description: "API token for Terraform Enterprise. This will be used to generate a ~/.terraformrc file." +
-			" Only set if using TFE as a backend." +
+		description: "API token for Terraform Cloud/Enterprise. This will be used to generate a ~/.terraformrc file." +
+			" Only set if using TFC/E as a remote backend." +
 			" Should be specified via the ATLANTIS_TFE_TOKEN environment variable for security.",
 	},
 	DefaultTFVersionFlag: {
@@ -211,6 +210,10 @@ var boolFlags = map[string]boolFlag{
 		description:  "Automatically merge pull requests when all plans are successfully applied.",
 		defaultValue: false,
 	},
+	DisableApplyAllFlag: {
+		description:  "Disable \"atlantis apply\" command so a specific project/workspace/directory has to be specified for applies.",
+		defaultValue: false,
+	},
 	RequireApprovalFlag: {
 		description:  "Require pull requests to be \"Approved\" before allowing the apply command to be run.",
 		defaultValue: false,
@@ -223,6 +226,11 @@ var boolFlags = map[string]boolFlag{
 	},
 	SilenceWhitelistErrorsFlag: {
 		description:  "Silences the posting of whitelist error comments.",
+		defaultValue: false,
+	},
+	WriteGitCredsFlag: {
+		description: "Write out a .git-credentials file with the provider user and token to allow authentication with git over HTTPS." +
+			" This does write secrets to disk and should only be enabled in a secure environment.",
 		defaultValue: false,
 	},
 }
@@ -423,8 +431,8 @@ func (s *ServerCmd) setDefaults(c *server.UserConfig) {
 	if c.Port == 0 {
 		c.Port = DefaultPort
 	}
-	if c.GithubTeamWhitelist == "" {
-		c.GithubTeamWhitelist = DefaultGHTeamWhitelist
+	if c.TFEHostname == "" {
+		c.TFEHostname = DefaultTFEHostname
 	}
 }
 
@@ -492,6 +500,10 @@ func (s *ServerCmd) validate(userConfig server.UserConfig) error {
 		if strings.Contains(token, "\n") {
 			s.Logger.Warn("--%s contains a newline which is usually unintentional", name)
 		}
+	}
+
+	if userConfig.TFEHostname != DefaultTFEHostname && userConfig.TFEToken == "" {
+		return fmt.Errorf("if setting --%s, must set --%s", TFEHostnameFlag, TFETokenFlag)
 	}
 
 	return nil
