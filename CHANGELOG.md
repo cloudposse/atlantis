@@ -1,24 +1,24 @@
 # v0.9.0
 
 ## Description
-This release contains a new step for custom workflows called `env`. It allows
+This release contains a new step for custom workflows called `var`. It allows
 users to set environment variables statically and dynamically for their workflows:
 ```yaml
 workflows:
-  env:
+  var:
     plan:
       steps:
-      - env:
+      - var:
           name: STATIC
           value: set-statically
-      - env:
+      - var:
           name: DYNAMIC
           command: echo set-dynamically
       - run: echo $STATIC $DYNAMIC # outputs 'set-statically set-dynamically'
 ```
 
 ## Features
-* New `env` step in custom workflows ([#751](https://github.com/runatlantis/atlantis/pull/751))
+* New `var` step in custom workflows ([#751](https://github.com/runatlantis/atlantis/pull/751))
 * New flag `--write-git-creds` helps Atlantis support private module sources. ([#711](https://github.com/runatlantis/atlantis/pull/711))
 * Upgrade Terraform to 0.12.7 in our base Docker image.
 * Support for Terragrunt > 0.19.0 ([#748](https://github.com/runatlantis/atlantis/pull/748))

@@ -1,10 +1,9 @@
 version: 2
 jobs:
   test:
+    working_directory: /go/src/github.com/runatlantis/atlantis
     docker:
     - image: runatlantis/testing-env:latest
-      environment:
-        GOFLAGS: "-mod=vendor"
     steps:
     - checkout
     - run: make test-coverage
@@ -14,14 +13,15 @@ jobs:
     - run: make check-fmt
     - run: make check-lint
   e2e:
+    working_directory: /go/src/github.com/runatlantis/atlantis
     docker:
-    - image: circleci/golang:1.13
+    - image: circleci/golang:1.12
       environment:
         # This version of TF will be downloaded before Atlantis is started.
         # We do this instead of setting --default-tf-version because setting
         # that flag starts the download asynchronously so we'd have a race
         # condition.
-        TERRAFORM_VERSION: 0.12.9
+        TERRAFORM_VERSION: 0.12.7
     steps:
     - checkout
     - run: make build-service
@@ -53,10 +53,9 @@ jobs:
 
   # Build and push 'latest' Docker tag.
   docker_master:
+    working_directory: /go/src/github.com/runatlantis/atlantis
     docker:
-    - image: circleci/golang:1.13
-      environment:
-        GOFLAGS: "-mod=vendor"
+    - image: circleci/golang:1.12
     steps:
     - checkout
     - run: make build-service
@@ -76,10 +75,9 @@ jobs:
           fi
   # Build and push Docker tag.
   docker_tag:
+    working_directory: /go/src/github.com/runatlantis/atlantis
     docker:
-    - image: circleci/golang:1.13
-      environment:
-        GOFLAGS: "-mod=vendor"
+    - image: circleci/golang:1.12
     steps:
     - checkout
     - run: make build-service

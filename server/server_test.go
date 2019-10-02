@@ -144,11 +144,10 @@ func TestIndex_Success(t *testing.T) {
 	it.VerifyWasCalledOnce().Execute(w, server.IndexData{
 		Locks: []server.LockIndexData{
 			{
-				LockPath:      "/lock?id=lkysow%252Fatlantis-example%252F.%252Fdefault",
-				RepoFullName:  "lkysow/atlantis-example",
-				PullNum:       9,
-				Time:          now,
-				TimeFormatted: now.Format("02-01-2006 15:04:05"),
+				LockPath:     "/lock?id=lkysow%252Fatlantis-example%252F.%252Fdefault",
+				RepoFullName: "lkysow/atlantis-example",
+				PullNum:      9,
+				Time:         now,
 			},
 		},
 		AtlantisVersion: atlantisVersion,
