@@ -131,7 +131,8 @@ var stringFlags = map[string]stringFlag{
 	GHTeamWhitelistFlag: {
 		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that " +
 			"the members of a particular team are allowed to perform. " +
-			"The format is {team}:{command},{team}:{command}, ex. dev:plan,ops:apply,devops:*. " +
+			"The format is {team}:{command},{team}:{command}. " +
+			"Valid values for 'command' are 'plan', 'apply' and '*', e.g. 'dev:plan,ops:apply,devops:*'" +
 			"This example gives the users from the 'dev' GitHub team the permissions to execute the 'plan' command, " +
 			"the 'ops' team the permissions to execute the 'apply' command, " +
 			"and allows the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) " +
