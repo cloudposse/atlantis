@@ -12,3 +12,5 @@ node_modules/
 helm/test-values.yaml
 *.swp
 golangci-lint
+.build-harness
+build-harness/
