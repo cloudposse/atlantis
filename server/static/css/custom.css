@@ -1,7 +1,7 @@
 .container {
   max-width: 1000px; }
 .header {
-  margin-top: 2.5vw;
+  margin-top: 6rem;
   text-align: center; }
 .heading-font-size {
   font-size: 1.2rem;
@@ -58,7 +58,7 @@ tbody {
 /* Larger than phone */
 @media (min-width: 550px) {
   .header {
-    margin-top: 4vw; }
+    margin-top: 10rem; }
   .value-props {
     margin-top: 9rem;
     margin-bottom: 7rem; }

@@ -27,9 +27,9 @@ import (
 	"strings"
 	"sync"
 
-	getter "github.com/hashicorp/go-getter"
-	version "github.com/hashicorp/go-version"
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/hashicorp/go-getter"
+	"github.com/hashicorp/go-version"
+	"github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/runatlantis/atlantis/server/logging"
 )
@@ -40,7 +40,10 @@ type Client interface {
 	// RunCommandWithVersion executes terraform with args in path. If v is nil,
 	// it will use the default Terraform version. workspace is the Terraform
 	// workspace which should be set as an environment variable.
-	RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, v *version.Version, workspace string) (string, error)
+	RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, envs map[string]string, v *version.Version, workspace string) (string, error)
+
+	// EnsureVersion makes sure that terraform version `v` is available to use
+	EnsureVersion(log *logging.SimpleLogger, v *version.Version) error
 }
 
 type DefaultClient struct {
@@ -97,7 +100,14 @@ var versionRegex = regexp.MustCompile("Terraform v(.*?)(\\s.*)?\n")
 // version.
 // tfDownloader is used to download terraform versions.
 // Will asynchronously download the required version if it doesn't exist already.
-func NewClient(log *logging.SimpleLogger, dataDir string, tfeToken string, defaultVersionStr string, defaultVersionFlagName string, tfDownloader Downloader) (*DefaultClient, error) {
+func NewClient(
+	log *logging.SimpleLogger,
+	dataDir string,
+	tfeToken string,
+	tfeHostname string,
+	defaultVersionStr string,
+	defaultVersionFlagName string,
+	tfDownloader Downloader) (*DefaultClient, error) {
 	var finalDefaultVersion *version.Version
 	var localVersion *version.Version
 	versions := make(map[string]string)
@@ -149,7 +159,7 @@ func NewClient(log *logging.SimpleLogger, dataDir string, tfeToken string, defau
 		if err != nil {
 			return nil, errors.Wrap(err, "getting home dir to write ~/.terraformrc file")
 		}
-		if err := generateRCFile(tfeToken, home); err != nil {
+		if err := generateRCFile(tfeToken, tfeHostname, home); err != nil {
 			return nil, err
 		}
 	}
@@ -177,12 +187,39 @@ func (c *DefaultClient) DefaultVersion() *version.Version {
 	return c.defaultVersion
 }
 
+// TerraformBinDir returns the directory where we download Terraform binaries.
+func (c *DefaultClient) TerraformBinDir() string {
+	return c.binDir
+}
+
+// See Client.EnsureVersion.
+func (c *DefaultClient) EnsureVersion(log *logging.SimpleLogger, v *version.Version) error {
+	if v == nil {
+		v = c.defaultVersion
+	}
+
+	var err error
+	c.versionsLock.Lock()
+	_, err = ensureVersion(log, c.downloader, c.versions, v, c.binDir)
+	c.versionsLock.Unlock()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // See Client.RunCommandWithVersion.
-func (c *DefaultClient) RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, v *version.Version, workspace string) (string, error) {
+func (c *DefaultClient) RunCommandWithVersion(log *logging.SimpleLogger, path string, args []string, customEnvVars map[string]string, v *version.Version, workspace string) (string, error) {
 	tfCmd, cmd, err := c.prepCmd(log, v, workspace, path, args)
 	if err != nil {
 		return "", err
 	}
+	envVars := cmd.Env
+	for key, val := range customEnvVars {
+		envVars = append(envVars, fmt.Sprintf("%s=%s", key, val))
+	}
+	cmd.Env = envVars
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		err = errors.Wrapf(err, "running %q in %q", tfCmd, path)
@@ -250,7 +287,7 @@ type Line struct {
 // Callers can use the input channel to pass stdin input to the command.
 // If any error is passed on the out channel, there will be no
 // further output (so callers are free to exit).
-func (c *DefaultClient) RunCommandAsync(log *logging.SimpleLogger, path string, args []string, v *version.Version, workspace string) (chan<- string, <-chan Line) {
+func (c *DefaultClient) RunCommandAsync(log *logging.SimpleLogger, path string, args []string, customEnvVars map[string]string, v *version.Version, workspace string) (chan<- string, <-chan Line) {
 	outCh := make(chan Line)
 	inCh := make(chan string)
 
@@ -273,6 +310,11 @@ func (c *DefaultClient) RunCommandAsync(log *logging.SimpleLogger, path string, 
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
 		stdin, _ := cmd.StdinPipe()
+		envVars := cmd.Env
+		for key, val := range customEnvVars {
+			envVars = append(envVars, fmt.Sprintf("%s=%s", key, val))
+		}
+		cmd.Env = envVars
 
 		log.Debug("starting %q in %q", tfCmd, path)
 		err = cmd.Start()
@@ -383,12 +425,13 @@ func ensureVersion(log *logging.SimpleLogger, dl Downloader, versions map[string
 	return dest, nil
 }
 
-// generateRCFile generates a .terraformrc file containing config for tfeToken.
+// generateRCFile generates a .terraformrc file containing config for tfeToken
+// and hostname tfeHostname.
 // It will create the file in home/.terraformrc.
-func generateRCFile(tfeToken string, home string) error {
+func generateRCFile(tfeToken string, tfeHostname string, home string) error {
 	const rcFilename = ".terraformrc"
 	rcFile := filepath.Join(home, rcFilename)
-	config := fmt.Sprintf(rcFileContents, tfeToken)
+	config := fmt.Sprintf(rcFileContents, tfeHostname, tfeToken)
 
 	// If there is already a .terraformrc file and its contents aren't exactly
 	// what we would have written to it, then we error out because we don't
@@ -428,7 +471,7 @@ func getVersion(tfBinary string) (*version.Version, error) {
 // rcFileContents is a format string to be used with Sprintf that can be used
 // to generate the contents of a ~/.terraformrc file for authenticating with
 // Terraform Enterprise.
-var rcFileContents = `credentials "app.terraform.io" {
+var rcFileContents = `credentials "%s" {
   token = %q
 }`
 

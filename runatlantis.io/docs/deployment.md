@@ -393,7 +393,7 @@ If you need to modify the Docker image that we provide, for instance to add the 
     FROM runatlantis/atlantis:{latest version}
 
     # copy a terraform binary of the version you need
-    COPY terragrunt /usr/local/bin/terrgrunt
+    COPY terragrunt /usr/local/bin/terragrunt
     ```
 
 1. Build your Docker image
@@ -405,6 +405,11 @@ If you need to modify the Docker image that we provide, for instance to add the 
     ```bash
     docker run {YOUR_DOCKER_ORG}/atlantis-custom server --gh-user=GITHUB_USERNAME --gh-token=GITHUB_TOKEN
     ```
+
+### Microsoft Azure
+The standard [Kubernetes Helm Chart](#kubernetes-helm-chart) should work fine on [Azure Kubernetes Service](https://docs.microsoft.com/en-us/azure/aks/intro-kubernetes).
+
+Another option is [Azure Container Instances](https://docs.microsoft.com/en-us/azure/container-instances/). See this community member's [repo](https://github.com/jplane/atlantis-on-aci) for install scripts and more information on running Atlantis on ACI.
 
 ### Roll Your Own
 If you want to roll your own Atlantis installation, you can get the `atlantis`

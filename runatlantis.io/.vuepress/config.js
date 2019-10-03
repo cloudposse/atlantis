@@ -66,7 +66,7 @@ module.exports = {
                         'apply-requirements',
                         'checkout-strategy',
                         'terraform-versions',
-                        'terraform-enterprise'
+                        'terraform-cloud'
                     ]
                 },
                 {
@@ -85,6 +85,13 @@ module.exports = {
                         'autoplanning',
                         'automerging',
                         'security'
+                    ]
+                },
+                {
+                    title: 'Troubleshooting',
+                    collapsable: true,
+                    children: [
+                        'troubleshooting-https',
                     ]
                 }
             ]
