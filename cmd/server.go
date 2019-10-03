@@ -129,10 +129,13 @@ var stringFlags = map[string]stringFlag{
 		defaultValue: DefaultGHHostname,
 	},
 	GHTeamWhitelistFlag: {
-		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that the members of a particular team are allowed to perform. " +
+		description: "Comma separated list of key-value pairs representing the GitHub teams and the operations that " +
+			"the members of a particular team are allowed to perform. " +
 			"The format is {team}:{command},{team}:{command}, ex. dev:plan,ops:apply,devops:*. " +
-			"This example means to give the users from the 'dev' GitHub team the permissions to execute the 'plan' command, give the 'ops' team the permissions to execute the 'apply' command, " +
-			"and allow the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) will be used and the default behavior will be to not check permissions " +
+			"This example gives the users from the 'dev' GitHub team the permissions to execute the 'plan' command, " +
+			"the 'ops' team the permissions to execute the 'apply' command, " +
+			"and allows the 'devops' team to perform any operation. If this argument is not provided, the default value (*:*) " +
+			"will be used and the default behavior will be to not check permissions " +
 			"and to allow users from any team to perform any operation.",
 		defaultValue: DefaultGHTeamWhitelist,
 	},
