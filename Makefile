@@ -30,6 +30,8 @@ debug: ## Output internal make variables
 
 deps: ## Download dependencies
 	go get -u github.com/golang/dep/cmd/dep
+	go get github.com/jteeuwen/go-bindata/...
+	go get github.com/elazarl/go-bindata-assetfs/...
 	dep ensure
 
 build-service: ## Build the main Go service
@@ -61,7 +63,9 @@ test-coverage-html:
 	go tool cover -html .cover/cover.out
 
 dist: ## Package up everything in static/ using go-bindata-assetfs so it can be served by a single binary
-	rm -f server/static/bindata_assetfs.go && go-bindata-assetfs -pkg static -prefix server server/static/... && mv bindata_assetfs.go server/static
+	rm -f server/static/bindata_assetfs.go && \
+	go-bindata-assetfs -o server/static/bindata_assetfs.go -pkg static -prefix server server/static/... && \
+	go fmt server/static/bindata_assetfs.go
 
 release: ## Create packages for a release
 	./scripts/binary-release.sh
