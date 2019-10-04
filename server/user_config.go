@@ -18,6 +18,7 @@ type UserConfig struct {
 	DataDir                string `mapstructure:"data-dir"`
 	DisableApplyAll        bool   `mapstructure:"disable-apply-all"`
 	GithubHostname         string `mapstructure:"gh-hostname"`
+	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
 	GithubToken            string `mapstructure:"gh-token"`
 	GithubUser             string `mapstructure:"gh-user"`
 	GithubWebhookSecret    string `mapstructure:"gh-webhook-secret"`
