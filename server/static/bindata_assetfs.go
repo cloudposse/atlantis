@@ -90,7 +90,7 @@ func staticBindata_assetfsGo() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/bindata_assetfs.go", size: 0, mode: os.FileMode(420), modTime: time.Unix(1570116691, 0)}
+	info := bindataFileInfo{name: "static/bindata_assetfs.go", size: 0, mode: os.FileMode(420), modTime: time.Unix(1570842721, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -110,7 +110,7 @@ func staticCssCustomCss() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "static/css/custom.css", size: 7806, mode: os.FileMode(420), modTime: time.Unix(1570116437, 0)}
+	info := bindataFileInfo{name: "static/css/custom.css", size: 7806, mode: os.FileMode(420), modTime: time.Unix(1570832276, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
