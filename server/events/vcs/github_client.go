@@ -221,6 +221,7 @@ func (g *GithubClient) MergePull(pull models.PullRequest) error {
 }
 
 // GetTeamNamesForUser returns the names of the teams or groups that the user belongs to (in the organization the repository belongs to).
+// https://developer.github.com/v3/teams/members/#get-team-membership
 func (g *GithubClient) GetTeamNamesForUser(repo models.Repo, user models.User) ([]string, error) {
 	var teamNames []string
 	opts := &github.ListOptions{}
@@ -232,14 +233,10 @@ func (g *GithubClient) GetTeamNamesForUser(repo models.Repo, user models.User) (
 		}
 		for _, t := range teams {
 			membership, _, err := g.client.Teams.GetTeamMembership(g.ctx, t.GetID(), user.Username)
-			if err != nil {
-				return nil, err
-			}
-			if membership == nil {
-				return nil, errors.New("Failed to get Team membership for user")
-			}
-			if *membership.Role == "member" || *membership.Role == "maintainer" {
-				teamNames = append(teamNames, t.GetName())
+			if err == nil && membership != nil {
+				if *membership.State == "active" && (*membership.Role == "member" || *membership.Role == "maintainer") {
+					teamNames = append(teamNames, t.GetName())
+				}
 			}
 		}
 		if resp.NextPage == 0 {
