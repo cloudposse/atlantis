@@ -1,5 +1,4 @@
 Ran Plan for 2 projects:
-
 1. dir: `.` workspace: `default`
 1. dir: `.` workspace: `staging`
 
@@ -16,11 +15,8 @@ Resource actions are indicated with the following symbols:
 
 Terraform will perform the following actions:
 
-  # null_resource.simple[0] will be created
-+ resource "null_resource" "simple" {
-      + id = (known after apply)
-    }
-
++ null_resource.simple
+      id: <computed>
 Plan: 1 to add, 0 to change, 0 to destroy.
 
 postplan
@@ -36,8 +32,6 @@ postplan
 
 ---
 ### 2. dir: `.` workspace: `staging`
-<details><summary>Show Output</summary>
-
 ```diff
 
 An execution plan has been generated and is shown below.
@@ -46,11 +40,8 @@ Resource actions are indicated with the following symbols:
 
 Terraform will perform the following actions:
 
-  # null_resource.simple[0] will be created
-+ resource "null_resource" "simple" {
-      + id = (known after apply)
-    }
-
++ null_resource.simple
+      id: <computed>
 Plan: 1 to add, 0 to change, 0 to destroy.
 
 ```
@@ -60,7 +51,6 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 * :put_litter_in_its_place: To **delete** this plan click [here](lock-url)
 * :repeat: To **plan** this project again, comment:
     * `atlantis plan -w staging`
-</details>
 
 ---
 * :fast_forward: To **apply** all unapplied plans from this pull request, comment:

@@ -44,60 +44,60 @@ func (mock *MockGitlabRequestParserValidator) ParseAndValidate(r *http.Request, 
 	return ret0, ret1
 }
 
-func (mock *MockGitlabRequestParserValidator) VerifyWasCalledOnce() *VerifierMockGitlabRequestParserValidator {
-	return &VerifierMockGitlabRequestParserValidator{
+func (mock *MockGitlabRequestParserValidator) VerifyWasCalledOnce() *VerifierGitlabRequestParserValidator {
+	return &VerifierGitlabRequestParserValidator{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockGitlabRequestParserValidator) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockGitlabRequestParserValidator {
-	return &VerifierMockGitlabRequestParserValidator{
+func (mock *MockGitlabRequestParserValidator) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierGitlabRequestParserValidator {
+	return &VerifierGitlabRequestParserValidator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockGitlabRequestParserValidator) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockGitlabRequestParserValidator {
-	return &VerifierMockGitlabRequestParserValidator{
+func (mock *MockGitlabRequestParserValidator) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierGitlabRequestParserValidator {
+	return &VerifierGitlabRequestParserValidator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockGitlabRequestParserValidator) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockGitlabRequestParserValidator {
-	return &VerifierMockGitlabRequestParserValidator{
+func (mock *MockGitlabRequestParserValidator) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierGitlabRequestParserValidator {
+	return &VerifierGitlabRequestParserValidator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockGitlabRequestParserValidator struct {
+type VerifierGitlabRequestParserValidator struct {
 	mock                   *MockGitlabRequestParserValidator
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockGitlabRequestParserValidator) ParseAndValidate(r *http.Request, secret []byte) *MockGitlabRequestParserValidator_ParseAndValidate_OngoingVerification {
+func (verifier *VerifierGitlabRequestParserValidator) ParseAndValidate(r *http.Request, secret []byte) *GitlabRequestParserValidator_ParseAndValidate_OngoingVerification {
 	params := []pegomock.Param{r, secret}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ParseAndValidate", params, verifier.timeout)
-	return &MockGitlabRequestParserValidator_ParseAndValidate_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &GitlabRequestParserValidator_ParseAndValidate_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockGitlabRequestParserValidator_ParseAndValidate_OngoingVerification struct {
+type GitlabRequestParserValidator_ParseAndValidate_OngoingVerification struct {
 	mock              *MockGitlabRequestParserValidator
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockGitlabRequestParserValidator_ParseAndValidate_OngoingVerification) GetCapturedArguments() (*http.Request, []byte) {
+func (c *GitlabRequestParserValidator_ParseAndValidate_OngoingVerification) GetCapturedArguments() (*http.Request, []byte) {
 	r, secret := c.GetAllCapturedArguments()
 	return r[len(r)-1], secret[len(secret)-1]
 }
 
-func (c *MockGitlabRequestParserValidator_ParseAndValidate_OngoingVerification) GetAllCapturedArguments() (_param0 []*http.Request, _param1 [][]byte) {
+func (c *GitlabRequestParserValidator_ParseAndValidate_OngoingVerification) GetAllCapturedArguments() (_param0 []*http.Request, _param1 [][]byte) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]*http.Request, len(params[0]))

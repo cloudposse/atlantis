@@ -44,60 +44,60 @@ func (mock *MockGitlabMergeRequestGetter) GetMergeRequest(repoFullName string, p
 	return ret0, ret1
 }
 
-func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledOnce() *VerifierMockGitlabMergeRequestGetter {
-	return &VerifierMockGitlabMergeRequestGetter{
+func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledOnce() *VerifierGitlabMergeRequestGetter {
+	return &VerifierGitlabMergeRequestGetter{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockGitlabMergeRequestGetter) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockGitlabMergeRequestGetter {
-	return &VerifierMockGitlabMergeRequestGetter{
+func (mock *MockGitlabMergeRequestGetter) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierGitlabMergeRequestGetter {
+	return &VerifierGitlabMergeRequestGetter{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockGitlabMergeRequestGetter {
-	return &VerifierMockGitlabMergeRequestGetter{
+func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierGitlabMergeRequestGetter {
+	return &VerifierGitlabMergeRequestGetter{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockGitlabMergeRequestGetter {
-	return &VerifierMockGitlabMergeRequestGetter{
+func (mock *MockGitlabMergeRequestGetter) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierGitlabMergeRequestGetter {
+	return &VerifierGitlabMergeRequestGetter{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockGitlabMergeRequestGetter struct {
+type VerifierGitlabMergeRequestGetter struct {
 	mock                   *MockGitlabMergeRequestGetter
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockGitlabMergeRequestGetter) GetMergeRequest(repoFullName string, pullNum int) *MockGitlabMergeRequestGetter_GetMergeRequest_OngoingVerification {
+func (verifier *VerifierGitlabMergeRequestGetter) GetMergeRequest(repoFullName string, pullNum int) *GitlabMergeRequestGetter_GetMergeRequest_OngoingVerification {
 	params := []pegomock.Param{repoFullName, pullNum}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "GetMergeRequest", params, verifier.timeout)
-	return &MockGitlabMergeRequestGetter_GetMergeRequest_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &GitlabMergeRequestGetter_GetMergeRequest_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockGitlabMergeRequestGetter_GetMergeRequest_OngoingVerification struct {
+type GitlabMergeRequestGetter_GetMergeRequest_OngoingVerification struct {
 	mock              *MockGitlabMergeRequestGetter
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockGitlabMergeRequestGetter_GetMergeRequest_OngoingVerification) GetCapturedArguments() (string, int) {
+func (c *GitlabMergeRequestGetter_GetMergeRequest_OngoingVerification) GetCapturedArguments() (string, int) {
 	repoFullName, pullNum := c.GetAllCapturedArguments()
 	return repoFullName[len(repoFullName)-1], pullNum[len(pullNum)-1]
 }
 
-func (c *MockGitlabMergeRequestGetter_GetMergeRequest_OngoingVerification) GetAllCapturedArguments() (_param0 []string, _param1 []int) {
+func (c *GitlabMergeRequestGetter_GetMergeRequest_OngoingVerification) GetAllCapturedArguments() (_param0 []string, _param1 []int) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))

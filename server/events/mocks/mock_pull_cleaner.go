@@ -40,60 +40,60 @@ func (mock *MockPullCleaner) CleanUpPull(repo models.Repo, pull models.PullReque
 	return ret0
 }
 
-func (mock *MockPullCleaner) VerifyWasCalledOnce() *VerifierMockPullCleaner {
-	return &VerifierMockPullCleaner{
+func (mock *MockPullCleaner) VerifyWasCalledOnce() *VerifierPullCleaner {
+	return &VerifierPullCleaner{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockPullCleaner) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockPullCleaner {
-	return &VerifierMockPullCleaner{
+func (mock *MockPullCleaner) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierPullCleaner {
+	return &VerifierPullCleaner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockPullCleaner) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockPullCleaner {
-	return &VerifierMockPullCleaner{
+func (mock *MockPullCleaner) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierPullCleaner {
+	return &VerifierPullCleaner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockPullCleaner) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockPullCleaner {
-	return &VerifierMockPullCleaner{
+func (mock *MockPullCleaner) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierPullCleaner {
+	return &VerifierPullCleaner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockPullCleaner struct {
+type VerifierPullCleaner struct {
 	mock                   *MockPullCleaner
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockPullCleaner) CleanUpPull(repo models.Repo, pull models.PullRequest) *MockPullCleaner_CleanUpPull_OngoingVerification {
+func (verifier *VerifierPullCleaner) CleanUpPull(repo models.Repo, pull models.PullRequest) *PullCleaner_CleanUpPull_OngoingVerification {
 	params := []pegomock.Param{repo, pull}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "CleanUpPull", params, verifier.timeout)
-	return &MockPullCleaner_CleanUpPull_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &PullCleaner_CleanUpPull_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockPullCleaner_CleanUpPull_OngoingVerification struct {
+type PullCleaner_CleanUpPull_OngoingVerification struct {
 	mock              *MockPullCleaner
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockPullCleaner_CleanUpPull_OngoingVerification) GetCapturedArguments() (models.Repo, models.PullRequest) {
+func (c *PullCleaner_CleanUpPull_OngoingVerification) GetCapturedArguments() (models.Repo, models.PullRequest) {
 	repo, pull := c.GetAllCapturedArguments()
 	return repo[len(repo)-1], pull[len(pull)-1]
 }
 
-func (c *MockPullCleaner_CleanUpPull_OngoingVerification) GetAllCapturedArguments() (_param0 []models.Repo, _param1 []models.PullRequest) {
+func (c *PullCleaner_CleanUpPull_OngoingVerification) GetAllCapturedArguments() (_param0 []models.Repo, _param1 []models.PullRequest) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]models.Repo, len(params[0]))

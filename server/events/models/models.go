@@ -45,9 +45,8 @@ type Repo struct {
 	// CloneURL is the full HTTPS url for cloning with username and token string
 	// ex. "https://username:token@github.com/atlantis/atlantis.git".
 	CloneURL string
-	// SanitizedCloneURL is the full HTTPS url for cloning with the password
-	// redacted.
-	// ex. "https://user:<redacted>@github.com/atlantis/atlantis.git".
+	// SanitizedCloneURL is the full HTTPS url for cloning without the username and password.
+	// ex. "https://github.com/atlantis/atlantis.git".
 	SanitizedCloneURL string
 	// VCSHost is where this repo is hosted.
 	VCSHost VCSHost
@@ -96,14 +95,11 @@ func NewRepo(vcsHostType VCSHostType, repoFullName string, cloneURL string, vcsU
 	escapedVCSUser := url.QueryEscape(vcsUser)
 	escapedVCSToken := url.QueryEscape(vcsToken)
 	auth := fmt.Sprintf("%s:%s@", escapedVCSUser, escapedVCSToken)
-	redactedAuth := fmt.Sprintf("%s:<redacted>@", escapedVCSUser)
 
 	// Construct clone urls with http and https auth. Need to do both
 	// because Bitbucket supports http.
 	authedCloneURL := strings.Replace(cloneURL, "https://", "https://"+auth, -1)
 	authedCloneURL = strings.Replace(authedCloneURL, "http://", "http://"+auth, -1)
-	sanitizedCloneURL := strings.Replace(cloneURL, "https://", "https://"+redactedAuth, -1)
-	sanitizedCloneURL = strings.Replace(sanitizedCloneURL, "http://", "http://"+redactedAuth, -1)
 
 	// Get the owner and repo names from the full name.
 	owner, repo := SplitRepoFullName(repoFullName)
@@ -124,7 +120,7 @@ func NewRepo(vcsHostType VCSHostType, repoFullName string, cloneURL string, vcsU
 		Owner:             owner,
 		Name:              repo,
 		CloneURL:          authedCloneURL,
-		SanitizedCloneURL: sanitizedCloneURL,
+		SanitizedCloneURL: cloneURL,
 		VCSHost: VCSHost{
 			Type:     vcsHostType,
 			Hostname: cloneURLParsed.Hostname(),
@@ -305,11 +301,9 @@ type ProjectCommandContext struct {
 	AutoplanEnabled bool
 	// BaseRepo is the repository that the pull request will be merged into.
 	BaseRepo Repo
-	// EscapedCommentArgs are the extra arguments that were added to the atlantis
-	// command, ex. atlantis plan -- -target=resource. We then escape them
-	// by adding a \ before each character so that they can be used within
-	// sh -c safely, i.e. sh -c "terraform plan $(touch bad)".
-	EscapedCommentArgs []string
+	// CommentArgs are the extra arguments appended to comment,
+	// ex. atlantis plan -- -target=resource
+	CommentArgs []string
 	// HeadRepo is the repository that is getting merged into the BaseRepo.
 	// If the pull request branch is from the same repository then HeadRepo will
 	// be the same as BaseRepo.

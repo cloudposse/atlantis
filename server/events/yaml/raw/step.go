@@ -13,29 +13,20 @@ import (
 
 const (
 	ExtraArgsKey  = "extra_args"
-	NameArgKey    = "name"
-	CommandArgKey = "command"
-	ValueArgKey   = "value"
 	RunStepName   = "run"
 	PlanStepName  = "plan"
 	ApplyStepName = "apply"
 	InitStepName  = "init"
-	EnvStepName   = "env"
 )
 
 // Step represents a single action/command to perform. In YAML, it can be set as
 // 1. A single string for a built-in command:
 //    - init
 //    - plan
-// 2. A map for an env step with name and command or value
-//    - env:
-//        name: test
-//        command: echo 312
-//        value: value
-// 3. A map for a built-in command and extra_args:
+// 2. A map for a built-in command and extra_args:
 //    - plan:
 //        extra_args: [-var-file=staging.tfvars]
-// 4. A map for a custom run command:
+// 3. A map for a custom run command:
 //    - run: my custom command
 // Here we parse step in the most generic fashion possible. See fields for more
 // details.
@@ -43,11 +34,9 @@ type Step struct {
 	// Key will be set in case #1 and #3 above to the key. In case #2, there
 	// could be multiple keys (since the element is a map) so we don't set Key.
 	Key *string
-	// Env will be set in case #2 above.
-	Env map[string]map[string]string
-	// Map will be set in case #3 above.
+	// Map will be set in case #2 above.
 	Map map[string]map[string][]string
-	// StringVal will be set in case #4 above.
+	// StringVal will be set in case #3 above.
 	StringVal map[string]string
 }
 
@@ -63,7 +52,7 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 func (s Step) Validate() error {
 	validStep := func(value interface{}) error {
 		str := *value.(*string)
-		if str != InitStepName && str != PlanStepName && str != ApplyStepName && str != EnvStepName {
+		if str != InitStepName && str != PlanStepName && str != ApplyStepName {
 			return fmt.Errorf("%q is not a valid step type, maybe you omitted the 'run' key", str)
 		}
 		return nil
@@ -90,8 +79,6 @@ func (s Step) Validate() error {
 			for k := range args {
 				argKeys = append(argKeys, k)
 			}
-			// Sort so tests can be deterministic.
-			sort.Strings(argKeys)
 
 			// args should contain a single 'extra_args' key.
 			if len(argKeys) > 1 {
@@ -102,51 +89,6 @@ func (s Step) Validate() error {
 				if k != ExtraArgsKey {
 					return fmt.Errorf("built-in steps only support a single %s key, found %q in step %s", ExtraArgsKey, k, stepName)
 				}
-			}
-		}
-		return nil
-	}
-
-	envStep := func(value interface{}) error {
-		elem := value.(map[string]map[string]string)
-		var keys []string
-		for k := range elem {
-			keys = append(keys, k)
-		}
-		// Sort so tests can be deterministic.
-		sort.Strings(keys)
-
-		if len(keys) > 1 {
-			return fmt.Errorf("step element can only contain a single key, found %d: %s",
-				len(keys), strings.Join(keys, ","))
-		}
-		for stepName, args := range elem {
-			if stepName != EnvStepName {
-				return fmt.Errorf("%q is not a valid step type", stepName)
-			}
-			var argKeys []string
-			for k := range args {
-				argKeys = append(argKeys, k)
-			}
-			// Sort so tests can be deterministic.
-			sort.Strings(argKeys)
-
-			foundNameKey := false
-			for _, k := range argKeys {
-				if k != NameArgKey && k != CommandArgKey && k != ValueArgKey {
-					return fmt.Errorf("env steps only support keys %q, %q and %q, found key %q", NameArgKey, ValueArgKey, CommandArgKey, k)
-				}
-				if k == NameArgKey {
-					foundNameKey = true
-				}
-			}
-			if !foundNameKey {
-				return fmt.Errorf("env steps must have a %q key set", NameArgKey)
-			}
-			// If we have 3 keys at this point then they've set both command and value.
-			if len(argKeys) != 2 {
-				return fmt.Errorf("env steps only support one of the %q or %q keys, found both",
-					ValueArgKey, CommandArgKey)
 			}
 		}
 		return nil
@@ -179,9 +121,6 @@ func (s Step) Validate() error {
 	if len(s.Map) > 0 {
 		return validation.Validate(s.Map, validation.By(extraArgs))
 	}
-	if len(s.Env) > 0 {
-		return validation.Validate(s.Env, validation.By(envStep))
-	}
 	if len(s.StringVal) > 0 {
 		return validation.Validate(s.StringVal, validation.By(runStep))
 	}
@@ -197,20 +136,6 @@ func (s Step) ToValid() valid.Step {
 	}
 
 	// This will trigger in case #2 (see Step docs).
-	if len(s.Env) > 0 {
-		// After validation we assume there's only one key and it's a valid
-		// step name so we just use the first one.
-		for stepName, stepArgs := range s.Env {
-			return valid.Step{
-				StepName:    stepName,
-				EnvVarName:  stepArgs[NameArgKey],
-				RunCommand:  stepArgs[CommandArgKey],
-				EnvVarValue: stepArgs[ValueArgKey],
-			}
-		}
-	}
-
-	// This will trigger in case #3 (see Step docs).
 	if len(s.Map) > 0 {
 		// After validation we assume there's only one key and it's a valid
 		// step name so we just use the first one.
@@ -222,7 +147,7 @@ func (s Step) ToValid() valid.Step {
 		}
 	}
 
-	// This will trigger in case #4 (see Step docs).
+	// This will trigger in case #3 (see Step docs).
 	if len(s.StringVal) > 0 {
 		// After validation we assume there's only one key and it's a valid
 		// step name so we just use the first one.
@@ -268,18 +193,6 @@ func (s *Step) unmarshalGeneric(unmarshal func(interface{}) error) error {
 	err = unmarshal(&step)
 	if err == nil {
 		s.Map = step
-		return nil
-	}
-
-	// This represents an env step, ex:
-	//   env:
-	//     name: k
-	//     value: hi //optional
-	//     command: exec
-	var envStep map[string]map[string]string
-	err = unmarshal(&envStep)
-	if err == nil {
-		s.Env = envStep
 		return nil
 	}
 

@@ -16,7 +16,6 @@ type UserConfig struct {
 	BitbucketWebhookSecret string `mapstructure:"bitbucket-webhook-secret"`
 	CheckoutStrategy       string `mapstructure:"checkout-strategy"`
 	DataDir                string `mapstructure:"data-dir"`
-	DisableApplyAll        bool   `mapstructure:"disable-apply-all"`
 	GithubHostname         string `mapstructure:"gh-hostname"`
 	GithubTeamWhitelist    string `mapstructure:"gh-team-whitelist"`
 	GithubToken            string `mapstructure:"gh-token"`
@@ -41,11 +40,9 @@ type UserConfig struct {
 	SlackToken             string          `mapstructure:"slack-token"`
 	SSLCertFile            string          `mapstructure:"ssl-cert-file"`
 	SSLKeyFile             string          `mapstructure:"ssl-key-file"`
-	TFEHostname            string          `mapstructure:"tfe-hostname"`
 	TFEToken               string          `mapstructure:"tfe-token"`
 	DefaultTFVersion       string          `mapstructure:"default-tf-version"`
 	Webhooks               []WebhookConfig `mapstructure:"webhooks"`
-	WriteGitCreds          bool            `mapstructure:"write-git-creds"`
 }
 
 // ToLogLevel returns the LogLevel object corresponding to the user-passed

@@ -39,60 +39,60 @@ func (mock *MockLockURLGenerator) GenerateLockURL(lockID string) string {
 	return ret0
 }
 
-func (mock *MockLockURLGenerator) VerifyWasCalledOnce() *VerifierMockLockURLGenerator {
-	return &VerifierMockLockURLGenerator{
+func (mock *MockLockURLGenerator) VerifyWasCalledOnce() *VerifierLockURLGenerator {
+	return &VerifierLockURLGenerator{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockLockURLGenerator) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockLockURLGenerator {
-	return &VerifierMockLockURLGenerator{
+func (mock *MockLockURLGenerator) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierLockURLGenerator {
+	return &VerifierLockURLGenerator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockLockURLGenerator) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockLockURLGenerator {
-	return &VerifierMockLockURLGenerator{
+func (mock *MockLockURLGenerator) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierLockURLGenerator {
+	return &VerifierLockURLGenerator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockLockURLGenerator) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockLockURLGenerator {
-	return &VerifierMockLockURLGenerator{
+func (mock *MockLockURLGenerator) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierLockURLGenerator {
+	return &VerifierLockURLGenerator{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockLockURLGenerator struct {
+type VerifierLockURLGenerator struct {
 	mock                   *MockLockURLGenerator
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockLockURLGenerator) GenerateLockURL(lockID string) *MockLockURLGenerator_GenerateLockURL_OngoingVerification {
+func (verifier *VerifierLockURLGenerator) GenerateLockURL(lockID string) *LockURLGenerator_GenerateLockURL_OngoingVerification {
 	params := []pegomock.Param{lockID}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "GenerateLockURL", params, verifier.timeout)
-	return &MockLockURLGenerator_GenerateLockURL_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &LockURLGenerator_GenerateLockURL_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockLockURLGenerator_GenerateLockURL_OngoingVerification struct {
+type LockURLGenerator_GenerateLockURL_OngoingVerification struct {
 	mock              *MockLockURLGenerator
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockLockURLGenerator_GenerateLockURL_OngoingVerification) GetCapturedArguments() string {
+func (c *LockURLGenerator_GenerateLockURL_OngoingVerification) GetCapturedArguments() string {
 	lockID := c.GetAllCapturedArguments()
 	return lockID[len(lockID)-1]
 }
 
-func (c *MockLockURLGenerator_GenerateLockURL_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
+func (c *LockURLGenerator_GenerateLockURL_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))

@@ -89,94 +89,94 @@ func (mock *MockSlackClient) PostMessage(channel string, applyResult webhooks.Ap
 	return ret0
 }
 
-func (mock *MockSlackClient) VerifyWasCalledOnce() *VerifierMockSlackClient {
-	return &VerifierMockSlackClient{
+func (mock *MockSlackClient) VerifyWasCalledOnce() *VerifierSlackClient {
+	return &VerifierSlackClient{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockSlackClient) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockSlackClient {
-	return &VerifierMockSlackClient{
+func (mock *MockSlackClient) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierSlackClient {
+	return &VerifierSlackClient{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockSlackClient) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockSlackClient {
-	return &VerifierMockSlackClient{
+func (mock *MockSlackClient) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierSlackClient {
+	return &VerifierSlackClient{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockSlackClient) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockSlackClient {
-	return &VerifierMockSlackClient{
+func (mock *MockSlackClient) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierSlackClient {
+	return &VerifierSlackClient{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockSlackClient struct {
+type VerifierSlackClient struct {
 	mock                   *MockSlackClient
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockSlackClient) AuthTest() *MockSlackClient_AuthTest_OngoingVerification {
+func (verifier *VerifierSlackClient) AuthTest() *SlackClient_AuthTest_OngoingVerification {
 	params := []pegomock.Param{}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "AuthTest", params, verifier.timeout)
-	return &MockSlackClient_AuthTest_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &SlackClient_AuthTest_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockSlackClient_AuthTest_OngoingVerification struct {
+type SlackClient_AuthTest_OngoingVerification struct {
 	mock              *MockSlackClient
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockSlackClient_AuthTest_OngoingVerification) GetCapturedArguments() {
+func (c *SlackClient_AuthTest_OngoingVerification) GetCapturedArguments() {
 }
 
-func (c *MockSlackClient_AuthTest_OngoingVerification) GetAllCapturedArguments() {
+func (c *SlackClient_AuthTest_OngoingVerification) GetAllCapturedArguments() {
 }
 
-func (verifier *VerifierMockSlackClient) TokenIsSet() *MockSlackClient_TokenIsSet_OngoingVerification {
+func (verifier *VerifierSlackClient) TokenIsSet() *SlackClient_TokenIsSet_OngoingVerification {
 	params := []pegomock.Param{}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "TokenIsSet", params, verifier.timeout)
-	return &MockSlackClient_TokenIsSet_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &SlackClient_TokenIsSet_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockSlackClient_TokenIsSet_OngoingVerification struct {
+type SlackClient_TokenIsSet_OngoingVerification struct {
 	mock              *MockSlackClient
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockSlackClient_TokenIsSet_OngoingVerification) GetCapturedArguments() {
+func (c *SlackClient_TokenIsSet_OngoingVerification) GetCapturedArguments() {
 }
 
-func (c *MockSlackClient_TokenIsSet_OngoingVerification) GetAllCapturedArguments() {
+func (c *SlackClient_TokenIsSet_OngoingVerification) GetAllCapturedArguments() {
 }
 
-func (verifier *VerifierMockSlackClient) ChannelExists(channelName string) *MockSlackClient_ChannelExists_OngoingVerification {
+func (verifier *VerifierSlackClient) ChannelExists(channelName string) *SlackClient_ChannelExists_OngoingVerification {
 	params := []pegomock.Param{channelName}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "ChannelExists", params, verifier.timeout)
-	return &MockSlackClient_ChannelExists_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &SlackClient_ChannelExists_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockSlackClient_ChannelExists_OngoingVerification struct {
+type SlackClient_ChannelExists_OngoingVerification struct {
 	mock              *MockSlackClient
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockSlackClient_ChannelExists_OngoingVerification) GetCapturedArguments() string {
+func (c *SlackClient_ChannelExists_OngoingVerification) GetCapturedArguments() string {
 	channelName := c.GetAllCapturedArguments()
 	return channelName[len(channelName)-1]
 }
 
-func (c *MockSlackClient_ChannelExists_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
+func (c *SlackClient_ChannelExists_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))
@@ -187,23 +187,23 @@ func (c *MockSlackClient_ChannelExists_OngoingVerification) GetAllCapturedArgume
 	return
 }
 
-func (verifier *VerifierMockSlackClient) PostMessage(channel string, applyResult webhooks.ApplyResult) *MockSlackClient_PostMessage_OngoingVerification {
+func (verifier *VerifierSlackClient) PostMessage(channel string, applyResult webhooks.ApplyResult) *SlackClient_PostMessage_OngoingVerification {
 	params := []pegomock.Param{channel, applyResult}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "PostMessage", params, verifier.timeout)
-	return &MockSlackClient_PostMessage_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &SlackClient_PostMessage_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockSlackClient_PostMessage_OngoingVerification struct {
+type SlackClient_PostMessage_OngoingVerification struct {
 	mock              *MockSlackClient
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockSlackClient_PostMessage_OngoingVerification) GetCapturedArguments() (string, webhooks.ApplyResult) {
+func (c *SlackClient_PostMessage_OngoingVerification) GetCapturedArguments() (string, webhooks.ApplyResult) {
 	channel, applyResult := c.GetAllCapturedArguments()
 	return channel[len(channel)-1], applyResult[len(applyResult)-1]
 }
 
-func (c *MockSlackClient_PostMessage_OngoingVerification) GetAllCapturedArguments() (_param0 []string, _param1 []webhooks.ApplyResult) {
+func (c *SlackClient_PostMessage_OngoingVerification) GetAllCapturedArguments() (_param0 []string, _param1 []webhooks.ApplyResult) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))

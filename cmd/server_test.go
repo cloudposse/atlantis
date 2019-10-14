@@ -341,7 +341,6 @@ func TestExecute_Defaults(t *testing.T) {
 	Equals(t, dataDir, passedConfig.DataDir)
 
 	Equals(t, "branch", passedConfig.CheckoutStrategy)
-	Equals(t, false, passedConfig.DisableApplyAll)
 	Equals(t, "", passedConfig.DefaultTFVersion)
 	Equals(t, "github.com", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
@@ -362,9 +361,7 @@ func TestExecute_Defaults(t *testing.T) {
 	Equals(t, "", passedConfig.SlackToken)
 	Equals(t, "", passedConfig.SSLCertFile)
 	Equals(t, "", passedConfig.SSLKeyFile)
-	Equals(t, "app.terraform.io", passedConfig.TFEHostname)
 	Equals(t, "", passedConfig.TFEToken)
-	Equals(t, false, passedConfig.WriteGitCreds)
 }
 
 func TestExecute_ExpandHomeInDataDir(t *testing.T) {
@@ -451,7 +448,6 @@ func TestExecute_Flags(t *testing.T) {
 		cmd.CheckoutStrategyFlag:       "merge",
 		cmd.DataDirFlag:                "/path",
 		cmd.DefaultTFVersionFlag:       "v0.11.0",
-		cmd.DisableApplyAllFlag:        true,
 		cmd.GHHostnameFlag:             "ghhostname",
 		cmd.GHTokenFlag:                "token",
 		cmd.GHUserFlag:                 "user",
@@ -468,9 +464,7 @@ func TestExecute_Flags(t *testing.T) {
 		cmd.SlackTokenFlag:             "slack-token",
 		cmd.SSLCertFileFlag:            "cert-file",
 		cmd.SSLKeyFileFlag:             "key-file",
-		cmd.TFEHostnameFlag:            "my-hostname",
 		cmd.TFETokenFlag:               "my-token",
-		cmd.WriteGitCredsFlag:          true,
 	})
 	err := c.Execute()
 	Ok(t, err)
@@ -486,7 +480,6 @@ func TestExecute_Flags(t *testing.T) {
 	Equals(t, "merge", passedConfig.CheckoutStrategy)
 	Equals(t, "/path", passedConfig.DataDir)
 	Equals(t, "v0.11.0", passedConfig.DefaultTFVersion)
-	Equals(t, true, passedConfig.DisableApplyAll)
 	Equals(t, "ghhostname", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
 	Equals(t, "user", passedConfig.GithubUser)
@@ -503,9 +496,7 @@ func TestExecute_Flags(t *testing.T) {
 	Equals(t, "slack-token", passedConfig.SlackToken)
 	Equals(t, "cert-file", passedConfig.SSLCertFile)
 	Equals(t, "key-file", passedConfig.SSLKeyFile)
-	Equals(t, "my-hostname", passedConfig.TFEHostname)
 	Equals(t, "my-token", passedConfig.TFEToken)
-	Equals(t, true, passedConfig.WriteGitCreds)
 }
 
 func TestExecute_ConfigFile(t *testing.T) {
@@ -522,7 +513,6 @@ bitbucket-webhook-secret: "bitbucket-secret"
 checkout-strategy: "merge"
 data-dir: "/path"
 default-tf-version: "v0.11.0"
-disable-apply-all: true
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -539,9 +529,7 @@ require-mergeable: true
 slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
-tfe-hostname: my-hostname
 tfe-token: my-token
-write-git-creds: true
 `)
 	defer os.Remove(tmpFile) // nolint: errcheck
 	c := setup(map[string]interface{}{
@@ -561,7 +549,6 @@ write-git-creds: true
 	Equals(t, "merge", passedConfig.CheckoutStrategy)
 	Equals(t, "/path", passedConfig.DataDir)
 	Equals(t, "v0.11.0", passedConfig.DefaultTFVersion)
-	Equals(t, true, passedConfig.DisableApplyAll)
 	Equals(t, "ghhostname", passedConfig.GithubHostname)
 	Equals(t, "token", passedConfig.GithubToken)
 	Equals(t, "user", passedConfig.GithubUser)
@@ -578,9 +565,7 @@ write-git-creds: true
 	Equals(t, "slack-token", passedConfig.SlackToken)
 	Equals(t, "cert-file", passedConfig.SSLCertFile)
 	Equals(t, "key-file", passedConfig.SSLKeyFile)
-	Equals(t, "my-hostname", passedConfig.TFEHostname)
 	Equals(t, "my-token", passedConfig.TFEToken)
-	Equals(t, true, passedConfig.WriteGitCreds)
 }
 
 func TestExecute_EnvironmentOverride(t *testing.T) {
@@ -597,7 +582,6 @@ bitbucket-webhook-secret: "bitbucket-secret"
 checkout-strategy: "merge"
 data-dir: "/path"
 default-tf-version: "v0.11.0"
-disable-apply-all: true
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -613,9 +597,7 @@ require-approval: true
 slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
-tfe-hostname: my-hostname
 tfe-token: my-token
-write-git-creds: true
 `)
 	defer os.Remove(tmpFile) // nolint: errcheck
 
@@ -631,7 +613,6 @@ write-git-creds: true
 		"BITBUCKET_WEBHOOK_SECRET": "override-bitbucket-secret",
 		"CHECKOUT_STRATEGY":        "branch",
 		"DATA_DIR":                 "/override-path",
-		"DISABLE_APPLY_ALL":        "false",
 		"DEFAULT_TF_VERSION":       "v0.12.0",
 		"GH_HOSTNAME":              "override-gh-hostname",
 		"GH_TOKEN":                 "override-gh-token",
@@ -649,9 +630,7 @@ write-git-creds: true
 		"SLACK_TOKEN":              "override-slack-token",
 		"SSL_CERT_FILE":            "override-cert-file",
 		"SSL_KEY_FILE":             "override-key-file",
-		"TFE_HOSTNAME":             "override-my-hostname",
 		"TFE_TOKEN":                "override-my-token",
-		"WRITE_GIT_CREDS":          "false",
 	} {
 		os.Setenv("ATLANTIS_"+name, value) // nolint: errcheck
 	}
@@ -671,7 +650,6 @@ write-git-creds: true
 	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
 	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
-	Equals(t, false, passedConfig.DisableApplyAll)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -688,9 +666,7 @@ write-git-creds: true
 	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
-	Equals(t, "override-my-hostname", passedConfig.TFEHostname)
 	Equals(t, "override-my-token", passedConfig.TFEToken)
-	Equals(t, false, passedConfig.WriteGitCreds)
 }
 
 func TestExecute_FlagConfigOverride(t *testing.T) {
@@ -707,7 +683,6 @@ bitbucket-webhook-secret: "bitbucket-secret"
 checkout-strategy: "merge"
 data-dir: "/path"
 default-tf-version: "v0.11.0"
-disable-apply-all: true
 gh-hostname: "ghhostname"
 gh-token: "token"
 gh-user: "user"
@@ -724,9 +699,7 @@ require-mergeable: true
 slack-token: slack-token
 ssl-cert-file: cert-file
 ssl-key-file: key-file
-tfe-hostname: my-hostname
 tfe-token: my-token
-write-git-creds: true
 `)
 
 	defer os.Remove(tmpFile) // nolint: errcheck
@@ -742,7 +715,6 @@ write-git-creds: true
 		cmd.CheckoutStrategyFlag:       "branch",
 		cmd.DataDirFlag:                "/override-path",
 		cmd.DefaultTFVersionFlag:       "v0.12.0",
-		cmd.DisableApplyAllFlag:        false,
 		cmd.GHHostnameFlag:             "override-gh-hostname",
 		cmd.GHTokenFlag:                "override-gh-token",
 		cmd.GHUserFlag:                 "override-gh-user",
@@ -759,9 +731,7 @@ write-git-creds: true
 		cmd.SlackTokenFlag:             "override-slack-token",
 		cmd.SSLCertFileFlag:            "override-cert-file",
 		cmd.SSLKeyFileFlag:             "override-key-file",
-		cmd.TFEHostnameFlag:            "override-my-hostname",
 		cmd.TFETokenFlag:               "override-my-token",
-		cmd.WriteGitCredsFlag:          false,
 	})
 	err := c.Execute()
 	Ok(t, err)
@@ -775,7 +745,6 @@ write-git-creds: true
 	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
 	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
-	Equals(t, false, passedConfig.DisableApplyAll)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -792,9 +761,7 @@ write-git-creds: true
 	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
-	Equals(t, "override-my-hostname", passedConfig.TFEHostname)
 	Equals(t, "override-my-token", passedConfig.TFEToken)
-	Equals(t, false, passedConfig.WriteGitCreds)
 
 }
 
@@ -813,7 +780,6 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		"CHECKOUT_STRATEGY":        "merge",
 		"DATA_DIR":                 "/path",
 		"DEFAULT_TF_VERSION":       "v0.11.0",
-		"DISABLE_APPLY_ALL":        "true",
 		"GH_HOSTNAME":              "gh-hostname",
 		"GH_TOKEN":                 "gh-token",
 		"GH_USER":                  "gh-user",
@@ -830,9 +796,7 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		"SLACK_TOKEN":              "slack-token",
 		"SSL_CERT_FILE":            "cert-file",
 		"SSL_KEY_FILE":             "key-file",
-		"TFE_HOSTNAME":             "my-hostname",
 		"TFE_TOKEN":                "my-token",
-		"WRITE_GIT_CREDS":          "true",
 	}
 	for name, value := range envVars {
 		os.Setenv("ATLANTIS_"+name, value) // nolint: errcheck
@@ -856,7 +820,6 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		cmd.CheckoutStrategyFlag:       "branch",
 		cmd.DataDirFlag:                "/override-path",
 		cmd.DefaultTFVersionFlag:       "v0.12.0",
-		cmd.DisableApplyAllFlag:        false,
 		cmd.GHHostnameFlag:             "override-gh-hostname",
 		cmd.GHTokenFlag:                "override-gh-token",
 		cmd.GHUserFlag:                 "override-gh-user",
@@ -873,9 +836,7 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 		cmd.SlackTokenFlag:             "override-slack-token",
 		cmd.SSLCertFileFlag:            "override-cert-file",
 		cmd.SSLKeyFileFlag:             "override-key-file",
-		cmd.TFEHostnameFlag:            "override-my-hostname",
 		cmd.TFETokenFlag:               "override-my-token",
-		cmd.WriteGitCredsFlag:          false,
 	})
 	err := c.Execute()
 	Ok(t, err)
@@ -891,7 +852,6 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 	Equals(t, "branch", passedConfig.CheckoutStrategy)
 	Equals(t, "/override-path", passedConfig.DataDir)
 	Equals(t, "v0.12.0", passedConfig.DefaultTFVersion)
-	Equals(t, false, passedConfig.DisableApplyAll)
 	Equals(t, "override-gh-hostname", passedConfig.GithubHostname)
 	Equals(t, "override-gh-token", passedConfig.GithubToken)
 	Equals(t, "override-gh-user", passedConfig.GithubUser)
@@ -908,9 +868,7 @@ func TestExecute_FlagEnvVarOverride(t *testing.T) {
 	Equals(t, "override-slack-token", passedConfig.SlackToken)
 	Equals(t, "override-cert-file", passedConfig.SSLCertFile)
 	Equals(t, "override-key-file", passedConfig.SSLKeyFile)
-	Equals(t, "override-my-hostname", passedConfig.TFEHostname)
 	Equals(t, "override-my-token", passedConfig.TFEToken)
-	Equals(t, false, passedConfig.WriteGitCreds)
 }
 
 // If using bitbucket cloud, webhook secrets are not supported.
@@ -967,18 +925,6 @@ func TestExecute_RepoCfgFlags(t *testing.T) {
 	})
 	err := c.Execute()
 	ErrEquals(t, "cannot use --repo-config and --repo-config-json at the same time", err)
-}
-
-// Can't use both --tfe-hostname flag without --tfe-token.
-func TestExecute_TFEHostnameOnly(t *testing.T) {
-	c := setup(map[string]interface{}{
-		cmd.GHUserFlag:        "user",
-		cmd.GHTokenFlag:       "token",
-		cmd.RepoWhitelistFlag: "github.com",
-		cmd.TFEHostnameFlag:   "not-app.terraform.io",
-	})
-	err := c.Execute()
-	ErrEquals(t, "if setting --tfe-hostname, must set --tfe-token", err)
 }
 
 func setup(flags map[string]interface{}) *cobra.Command {

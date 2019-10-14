@@ -28,7 +28,6 @@ type DiffStat struct {
 	Next   *string         `json:"next,omitempty"`
 }
 type DiffStatValue struct {
-	Status *string `json:"status,omitempty" validate:"required"`
 	// Old is the old file, this can be null.
 	Old *DiffStatFile `json:"old,omitempty"`
 	// New is the new file, this can be null.
@@ -52,7 +51,6 @@ type PullRequest struct {
 	Participants []Participant `json:"participants,omitempty" validate:"required"`
 	Links        *Links        `json:"links,omitempty" validate:"required"`
 	State        *string       `json:"state,omitempty" validate:"required"`
-	Author       *Author       `jsonN:"author,omitempty" validate:"required"`
 }
 type Links struct {
 	HTML *Link `json:"html,omitempty" validate:"required"`
@@ -63,7 +61,7 @@ type Link struct {
 type Participant struct {
 	Approved *bool `json:"approved,omitempty" validate:"required"`
 	User     *struct {
-		UUID *string `json:"uuid,omitempty" validate:"required"`
+		Username *string `json:"username,omitempty" validate:"required"`
 	} `json:"user,omitempty" validate:"required"`
 }
 type BranchMeta struct {
@@ -83,6 +81,8 @@ type Comment struct {
 type CommentContent struct {
 	Raw *string `json:"raw,omitempty" validate:"required"`
 }
-type Author struct {
-	UUID *string `json:"uuid,omitempty" validate:"required"`
+
+type ConflictStatus struct {
+	MergeImpossible *bool `json:"mergeimpossible,omitempty" validate:"required"`
+	IsConflicted    *bool `json:"isconflicted,omitempty" validate:"required"`
 }

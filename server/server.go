@@ -29,7 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/runatlantis/atlantis/server/events/db"
 	"github.com/runatlantis/atlantis/server/events/yaml/valid"
 
@@ -153,28 +152,6 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		}
 	}
 
-	if userConfig.WriteGitCreds {
-		home, err := homedir.Dir()
-		if err != nil {
-			return nil, errors.Wrap(err, "getting home dir to write ~/.git-credentials file")
-		}
-		if userConfig.GithubUser != "" {
-			if err := events.WriteGitCreds(userConfig.GithubUser, userConfig.GithubToken, userConfig.GithubHostname, home, logger); err != nil {
-				return nil, err
-			}
-		}
-		if userConfig.GitlabUser != "" {
-			if err := events.WriteGitCreds(userConfig.GitlabUser, userConfig.GitlabToken, userConfig.GitlabHostname, home, logger); err != nil {
-				return nil, err
-			}
-		}
-		if userConfig.BitbucketUser != "" {
-			if err := events.WriteGitCreds(userConfig.BitbucketUser, userConfig.BitbucketToken, userConfig.BitbucketBaseURL, home, logger); err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	var webhooksConfig []webhooks.Config
 	for _, c := range userConfig.Webhooks {
 		config := webhooks.Config{
@@ -191,14 +168,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	}
 	vcsClient := vcs.NewClientProxy(githubClient, gitlabClient, bitbucketCloudClient, bitbucketServerClient)
 	commitStatusUpdater := &events.DefaultCommitStatusUpdater{Client: vcsClient}
-	terraformClient, err := terraform.NewClient(
-		logger,
-		userConfig.DataDir,
-		userConfig.TFEToken,
-		userConfig.TFEHostname,
-		userConfig.DefaultTFVersion,
-		config.DefaultTFVersionFlag,
-		&terraform.DefaultDownloader{})
+	terraformClient, err := terraform.NewClient(logger, userConfig.DataDir, userConfig.TFEToken, userConfig.DefaultTFVersion, config.DefaultTFVersionFlag, &terraform.DefaultDownloader{})
 	// The flag.Lookup call is to detect if we're running in a unit test. If we
 	// are, then we don't error out because we don't have/want terraform
 	// installed on our CI system where the unit tests run.
@@ -207,7 +177,6 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	}
 	markdownRenderer := &events.MarkdownRenderer{
 		GitlabSupportsCommonMark: gitlabClient.SupportsCommonMark(),
-		DisableApplyAll:          userConfig.DisableApplyAll,
 	}
 	boltdb, err := db.New(userConfig.DataDir)
 	if err != nil {
@@ -272,11 +241,6 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	}
 	defaultTfVersion := terraformClient.DefaultVersion()
 	pendingPlanFinder := &events.DefaultPendingPlanFinder{}
-	runStepRunner := &runtime.RunStepRunner{
-		TerraformExecutor: terraformClient,
-		DefaultTFVersion:  defaultTfVersion,
-		TerraformBinDir:   terraformClient.TerraformBinDir(),
-	}
 	commandRunner := &events.DefaultCommandRunner{
 		VCSClient:                vcsClient,
 		GithubPullGetter:         githubClient,
@@ -287,7 +251,6 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		Logger:                   logger,
 		AllowForkPRs:             userConfig.AllowForkPRs,
 		AllowForkPRsFlag:         config.AllowForkPRsFlag,
-		DisableApplyAll:          userConfig.DisableApplyAll,
 		ProjectCommandBuilder: &events.DefaultProjectCommandBuilder{
 			ParserValidator:   validator,
 			ProjectFinder:     &events.DefaultProjectFinder{},
@@ -316,9 +279,8 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 				CommitStatusUpdater: commitStatusUpdater,
 				AsyncTFExec:         terraformClient,
 			},
-			RunStepRunner: runStepRunner,
-			EnvStepRunner: &runtime.EnvStepRunner{
-				RunStepRunner: runStepRunner,
+			RunStepRunner: &runtime.RunStepRunner{
+				DefaultTFVersion: defaultTfVersion,
 			},
 			PullApprovedChecker: vcsClient,
 			WorkingDir:          workingDir,

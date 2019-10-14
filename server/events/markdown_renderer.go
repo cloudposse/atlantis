@@ -37,16 +37,14 @@ type MarkdownRenderer struct {
 	// using supports the CommonMark markdown format.
 	// If we're not configured with a GitLab client, this will be false.
 	GitlabSupportsCommonMark bool
-	DisableApplyAll          bool
 }
 
 // commonData is data that all responses have.
 type commonData struct {
-	Command         string
-	Verbose         bool
-	Log             string
-	PlansDeleted    bool
-	DisableApplyAll bool
+	Command      string
+	Verbose      bool
+	Log          string
+	PlansDeleted bool
 }
 
 // errData is data about an error response.
@@ -84,11 +82,10 @@ type projectResultTmplData struct {
 func (m *MarkdownRenderer) Render(res CommandResult, cmdName models.CommandName, log string, verbose bool, vcsHost models.VCSHostType) string {
 	commandStr := strings.Title(cmdName.String())
 	common := commonData{
-		Command:         commandStr,
-		Verbose:         verbose,
-		Log:             log,
-		PlansDeleted:    res.PlansDeleted,
-		DisableApplyAll: m.DisableApplyAll,
+		Command:      commandStr,
+		Verbose:      verbose,
+		Log:          log,
+		PlansDeleted: res.PlansDeleted,
 	}
 	if res.Error != nil {
 		return m.renderTemplate(unwrappedErrWithLogTmpl, errData{res.Error.Error(), common})
@@ -198,25 +195,25 @@ var singleProjectApplyTmpl = template.Must(template.New("").Parse(
 var singleProjectPlanSuccessTmpl = template.Must(template.New("").Parse(
 	"{{$result := index .Results 0}}Ran {{.Command}} for {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n{{$result.Rendered}}\n" +
 		"\n" +
-		"{{ if ne .DisableApplyAll true  }}---\n" +
+		"---\n" +
 		"* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `atlantis apply`{{ end }}" + logTmpl))
+		"    * `atlantis apply`" + logTmpl))
 var singleProjectPlanUnsuccessfulTmpl = template.Must(template.New("").Parse(
 	"{{$result := index .Results 0}}Ran {{.Command}} for dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n\n" +
 		"{{$result.Rendered}}\n" + logTmpl))
 var multiProjectPlanTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
-	"Ran {{.Command}} for {{ len .Results }} projects:\n\n" +
+	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
 		"{{ range $result := .Results }}" +
 		"1. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{end}}\n" +
-		"{{ $disableApplyAll := .DisableApplyAll }}{{ range $i, $result := .Results }}" +
+		"{{ range $i, $result := .Results }}" +
 		"### {{add $i 1}}. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{$result.Rendered}}\n\n" +
-		"{{ if ne $disableApplyAll true }}---\n{{end}}{{end}}{{ if ne .DisableApplyAll true }}{{ if and (gt (len .Results) 0) (not .PlansDeleted) }}* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
-		"    * `atlantis apply`{{end}}{{end}}" +
+		"---\n{{end}}{{ if and (gt (len .Results) 0) (not .PlansDeleted) }}* :fast_forward: To **apply** all unapplied plans from this pull request, comment:\n" +
+		"    * `atlantis apply`{{end}}" +
 		logTmpl))
 var multiProjectApplyTmpl = template.Must(template.New("").Funcs(sprig.TxtFuncMap()).Parse(
-	"Ran {{.Command}} for {{ len .Results }} projects:\n\n" +
+	"Ran {{.Command}} for {{ len .Results }} projects:\n" +
 		"{{ range $result := .Results }}" +
 		"1. {{ if $result.ProjectName }}project: `{{$result.ProjectName}}` {{ end }}dir: `{{$result.RepoRelDir}}` workspace: `{{$result.Workspace}}`\n" +
 		"{{end}}\n" +

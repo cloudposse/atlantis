@@ -59,60 +59,60 @@ func (mock *MockPendingPlanFinder) DeletePlans(pullDir string) error {
 	return ret0
 }
 
-func (mock *MockPendingPlanFinder) VerifyWasCalledOnce() *VerifierMockPendingPlanFinder {
-	return &VerifierMockPendingPlanFinder{
+func (mock *MockPendingPlanFinder) VerifyWasCalledOnce() *VerifierPendingPlanFinder {
+	return &VerifierPendingPlanFinder{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockPendingPlanFinder) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockPendingPlanFinder {
-	return &VerifierMockPendingPlanFinder{
+func (mock *MockPendingPlanFinder) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierPendingPlanFinder {
+	return &VerifierPendingPlanFinder{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockPendingPlanFinder) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockPendingPlanFinder {
-	return &VerifierMockPendingPlanFinder{
+func (mock *MockPendingPlanFinder) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierPendingPlanFinder {
+	return &VerifierPendingPlanFinder{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockPendingPlanFinder) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockPendingPlanFinder {
-	return &VerifierMockPendingPlanFinder{
+func (mock *MockPendingPlanFinder) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierPendingPlanFinder {
+	return &VerifierPendingPlanFinder{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockPendingPlanFinder struct {
+type VerifierPendingPlanFinder struct {
 	mock                   *MockPendingPlanFinder
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockPendingPlanFinder) Find(pullDir string) *MockPendingPlanFinder_Find_OngoingVerification {
+func (verifier *VerifierPendingPlanFinder) Find(pullDir string) *PendingPlanFinder_Find_OngoingVerification {
 	params := []pegomock.Param{pullDir}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "Find", params, verifier.timeout)
-	return &MockPendingPlanFinder_Find_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &PendingPlanFinder_Find_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockPendingPlanFinder_Find_OngoingVerification struct {
+type PendingPlanFinder_Find_OngoingVerification struct {
 	mock              *MockPendingPlanFinder
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockPendingPlanFinder_Find_OngoingVerification) GetCapturedArguments() string {
+func (c *PendingPlanFinder_Find_OngoingVerification) GetCapturedArguments() string {
 	pullDir := c.GetAllCapturedArguments()
 	return pullDir[len(pullDir)-1]
 }
 
-func (c *MockPendingPlanFinder_Find_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
+func (c *PendingPlanFinder_Find_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))
@@ -123,23 +123,23 @@ func (c *MockPendingPlanFinder_Find_OngoingVerification) GetAllCapturedArguments
 	return
 }
 
-func (verifier *VerifierMockPendingPlanFinder) DeletePlans(pullDir string) *MockPendingPlanFinder_DeletePlans_OngoingVerification {
+func (verifier *VerifierPendingPlanFinder) DeletePlans(pullDir string) *PendingPlanFinder_DeletePlans_OngoingVerification {
 	params := []pegomock.Param{pullDir}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "DeletePlans", params, verifier.timeout)
-	return &MockPendingPlanFinder_DeletePlans_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &PendingPlanFinder_DeletePlans_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockPendingPlanFinder_DeletePlans_OngoingVerification struct {
+type PendingPlanFinder_DeletePlans_OngoingVerification struct {
 	mock              *MockPendingPlanFinder
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockPendingPlanFinder_DeletePlans_OngoingVerification) GetCapturedArguments() string {
+func (c *PendingPlanFinder_DeletePlans_OngoingVerification) GetCapturedArguments() string {
 	pullDir := c.GetAllCapturedArguments()
 	return pullDir[len(pullDir)-1]
 }
 
-func (c *MockPendingPlanFinder_DeletePlans_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
+func (c *PendingPlanFinder_DeletePlans_OngoingVerification) GetAllCapturedArguments() (_param0 []string) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]string, len(params[0]))

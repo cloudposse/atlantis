@@ -109,11 +109,6 @@ func TestPostMessage_Success(t *testing.T) {
 				Value: result.User.Username,
 				Short: true,
 			},
-			{
-				Title: "Directory",
-				Value: result.Directory,
-				Short: true,
-			},
 		},
 	}}
 	expParams.AsUser = false
@@ -151,11 +146,6 @@ func TestPostMessage_Error(t *testing.T) {
 			{
 				Title: "User",
 				Value: result.User.Username,
-				Short: true,
-			},
-			{
-				Title: "Directory",
-				Value: result.Directory,
 				Short: true,
 			},
 		},

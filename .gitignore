@@ -1,5 +1,5 @@
 .idea
-./atlantis
+atlantis
 *.iml
 .vscode
 atlantis.db
@@ -10,7 +10,6 @@ output
 node_modules/
 **/.vuepress/dist
 helm/test-values.yaml
-*.swp
-golangci-lint
+dist/
+build-harness
 .build-harness
-build-harness/

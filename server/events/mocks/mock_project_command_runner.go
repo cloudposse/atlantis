@@ -55,60 +55,60 @@ func (mock *MockProjectCommandRunner) Apply(ctx models.ProjectCommandContext) mo
 	return ret0
 }
 
-func (mock *MockProjectCommandRunner) VerifyWasCalledOnce() *VerifierMockProjectCommandRunner {
-	return &VerifierMockProjectCommandRunner{
+func (mock *MockProjectCommandRunner) VerifyWasCalledOnce() *VerifierProjectCommandRunner {
+	return &VerifierProjectCommandRunner{
 		mock:                   mock,
 		invocationCountMatcher: pegomock.Times(1),
 	}
 }
 
-func (mock *MockProjectCommandRunner) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierMockProjectCommandRunner {
-	return &VerifierMockProjectCommandRunner{
+func (mock *MockProjectCommandRunner) VerifyWasCalled(invocationCountMatcher pegomock.Matcher) *VerifierProjectCommandRunner {
+	return &VerifierProjectCommandRunner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 	}
 }
 
-func (mock *MockProjectCommandRunner) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierMockProjectCommandRunner {
-	return &VerifierMockProjectCommandRunner{
+func (mock *MockProjectCommandRunner) VerifyWasCalledInOrder(invocationCountMatcher pegomock.Matcher, inOrderContext *pegomock.InOrderContext) *VerifierProjectCommandRunner {
+	return &VerifierProjectCommandRunner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		inOrderContext:         inOrderContext,
 	}
 }
 
-func (mock *MockProjectCommandRunner) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierMockProjectCommandRunner {
-	return &VerifierMockProjectCommandRunner{
+func (mock *MockProjectCommandRunner) VerifyWasCalledEventually(invocationCountMatcher pegomock.Matcher, timeout time.Duration) *VerifierProjectCommandRunner {
+	return &VerifierProjectCommandRunner{
 		mock:                   mock,
 		invocationCountMatcher: invocationCountMatcher,
 		timeout:                timeout,
 	}
 }
 
-type VerifierMockProjectCommandRunner struct {
+type VerifierProjectCommandRunner struct {
 	mock                   *MockProjectCommandRunner
 	invocationCountMatcher pegomock.Matcher
 	inOrderContext         *pegomock.InOrderContext
 	timeout                time.Duration
 }
 
-func (verifier *VerifierMockProjectCommandRunner) Plan(ctx models.ProjectCommandContext) *MockProjectCommandRunner_Plan_OngoingVerification {
+func (verifier *VerifierProjectCommandRunner) Plan(ctx models.ProjectCommandContext) *ProjectCommandRunner_Plan_OngoingVerification {
 	params := []pegomock.Param{ctx}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "Plan", params, verifier.timeout)
-	return &MockProjectCommandRunner_Plan_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &ProjectCommandRunner_Plan_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockProjectCommandRunner_Plan_OngoingVerification struct {
+type ProjectCommandRunner_Plan_OngoingVerification struct {
 	mock              *MockProjectCommandRunner
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockProjectCommandRunner_Plan_OngoingVerification) GetCapturedArguments() models.ProjectCommandContext {
+func (c *ProjectCommandRunner_Plan_OngoingVerification) GetCapturedArguments() models.ProjectCommandContext {
 	ctx := c.GetAllCapturedArguments()
 	return ctx[len(ctx)-1]
 }
 
-func (c *MockProjectCommandRunner_Plan_OngoingVerification) GetAllCapturedArguments() (_param0 []models.ProjectCommandContext) {
+func (c *ProjectCommandRunner_Plan_OngoingVerification) GetAllCapturedArguments() (_param0 []models.ProjectCommandContext) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]models.ProjectCommandContext, len(params[0]))
@@ -119,23 +119,23 @@ func (c *MockProjectCommandRunner_Plan_OngoingVerification) GetAllCapturedArgume
 	return
 }
 
-func (verifier *VerifierMockProjectCommandRunner) Apply(ctx models.ProjectCommandContext) *MockProjectCommandRunner_Apply_OngoingVerification {
+func (verifier *VerifierProjectCommandRunner) Apply(ctx models.ProjectCommandContext) *ProjectCommandRunner_Apply_OngoingVerification {
 	params := []pegomock.Param{ctx}
 	methodInvocations := pegomock.GetGenericMockFrom(verifier.mock).Verify(verifier.inOrderContext, verifier.invocationCountMatcher, "Apply", params, verifier.timeout)
-	return &MockProjectCommandRunner_Apply_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
+	return &ProjectCommandRunner_Apply_OngoingVerification{mock: verifier.mock, methodInvocations: methodInvocations}
 }
 
-type MockProjectCommandRunner_Apply_OngoingVerification struct {
+type ProjectCommandRunner_Apply_OngoingVerification struct {
 	mock              *MockProjectCommandRunner
 	methodInvocations []pegomock.MethodInvocation
 }
 
-func (c *MockProjectCommandRunner_Apply_OngoingVerification) GetCapturedArguments() models.ProjectCommandContext {
+func (c *ProjectCommandRunner_Apply_OngoingVerification) GetCapturedArguments() models.ProjectCommandContext {
 	ctx := c.GetAllCapturedArguments()
 	return ctx[len(ctx)-1]
 }
 
-func (c *MockProjectCommandRunner_Apply_OngoingVerification) GetAllCapturedArguments() (_param0 []models.ProjectCommandContext) {
+func (c *ProjectCommandRunner_Apply_OngoingVerification) GetAllCapturedArguments() (_param0 []models.ProjectCommandContext) {
 	params := pegomock.GetGenericMockFrom(c.mock).GetInvocationParams(c.methodInvocations)
 	if len(params) > 0 {
 		_param0 = make([]models.ProjectCommandContext, len(params[0]))
