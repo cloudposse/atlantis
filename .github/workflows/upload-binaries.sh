@@ -5,6 +5,12 @@ if [[ -z "$GITHUB_TOKEN" ]]; then
   exit 1
 fi
 
+RELEASE_ID=$(jq --raw-output '.release.id' "$GITHUB_EVENT_PATH")
+if [ -z "$RELEASE_ID" ]; then
+  echo "Release ID is not set, will not upload binaries"
+  exit 0
+fi
+
 IS_DRAFT=$(jq --raw-output '.release.draft' "$GITHUB_EVENT_PATH")
 if [ "$IS_DRAFT" = true ]; then
   echo "This is a draft release, will not upload binaries"
@@ -12,7 +18,6 @@ if [ "$IS_DRAFT" = true ]; then
 fi
 
 AUTH_HEADER="Authorization: token ${GITHUB_TOKEN}"
-RELEASE_ID=$(jq --raw-output '.release.id' "$GITHUB_EVENT_PATH")
 FILES="release/*"
 
 for file in $FILES; do

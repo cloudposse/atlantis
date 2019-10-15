@@ -11,18 +11,25 @@ on:
 
 jobs:
   release:
-    runs-on: golang:latest
+    runs-on: ubuntu-latest
 
     steps:
       # Install packages
       - name: Install packages
+        shell: bash
         run: |
           apt-get update
-          apt-get install --yes bash ca-certificates curl jq
+          apt-get install --yes ca-certificates curl jq
 
-      # Checkout the current branch
+      # Setup Golang
+      - name: Setup Golang
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.13.1'
+
+      # Checkout the branch (into `runatlantis` path since this fork uses `runatlantis` Go imports)
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v1
         with:
           path: ./src/github.com/runatlantis/atlantis
 
