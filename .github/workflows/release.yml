@@ -16,7 +16,6 @@ jobs:
     steps:
       # Install packages
       - name: Install packages
-        shell: bash
         run: |
           apt-get update
           apt-get install --yes bash ca-certificates curl jq
