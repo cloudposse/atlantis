@@ -1,0 +1,51 @@
+# https://github.com/mvdan/github-actions-golang#how-do-i-set-up-a-gopath-build
+# https://help.github.com/en/articles/virtual-environments-for-github-actions
+# https://laszlo.cloud/setting-gopath-in-github-actions
+# https://laszlo.cloud/setting-gopath-in-github-actions-revisited
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    runs-on: golang:latest
+
+    steps:
+      # Install packages
+      - name: Install packages
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install --yes ca-certificates curl jq
+
+      # Checkout the current branch
+      - name: Checkout
+        uses: actions/checkout@master
+        with:
+          path: ./src/github.com/runatlantis/atlantis
+
+      # Build binaries
+      - name: Build binaries
+        shell: bash
+        env:
+          GOPATH: ${{ runner.workspace }}
+          GOBIN: ${{ runner.workspace }}/bin
+          GO111MODULE: off
+          CGO_ENABLED: 0
+        run: |
+          go get -u github.com/mitchellh/gox
+          go get -u github.com/golang/dep/cmd/dep
+          dep ensure
+          gox -osarch="windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64" -output "release/atlantis_{{.OS}}_{{.Arch}}"
+          ls -l release/
+
+      # Upload binaries
+      - name: Upload binaries
+        shell: bash
+        run: |
+          .github/workflows/upload-binaries.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
