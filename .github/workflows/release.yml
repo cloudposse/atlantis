@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           apt-get update
-          apt-get install --yes ca-certificates curl jq
+          apt-get install --yes bash ca-certificates curl jq
 
       # Checkout the current branch
       - name: Checkout
