@@ -38,8 +38,8 @@ jobs:
         # https://laszlo.cloud/setting-gopath-in-github-actions-revisited
         env:
           GOPATH: ${{ runner.workspace }}
-          GOBIN: ${{ runner.workspace }}/bin
-          PATH: $PATH:GOBIN
+          GOBIN: $GOPATH/bin
+          PATH: $PATH:$GOBIN
           GO111MODULE: off
           CGO_ENABLED: 0
         run: |
