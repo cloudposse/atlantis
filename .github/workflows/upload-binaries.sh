@@ -5,6 +5,11 @@ if [[ -z "$GITHUB_TOKEN" ]]; then
   exit 1
 fi
 
+if [[ -z "$1" ]]; then
+  echo "Missing file pattern parameter"
+  exit 1
+fi
+
 RELEASE_ID=$(jq --raw-output '.release.id' "$GITHUB_EVENT_PATH")
 if [ -z "$RELEASE_ID" ]; then
   echo "Release ID is not set, will not upload binaries"
@@ -18,13 +23,12 @@ if [ "$IS_DRAFT" = true ]; then
 fi
 
 AUTH_HEADER="Authorization: token ${GITHUB_TOKEN}"
-FILES="release/*"
 
-for file in $FILES; do
+for file in "$@"; do
   echo "Uploading file ${file}"
 
   if [[ ! -f "$file" || ! -s "$file" ]]; then
-    echo "File ${file} does not exist or is empty"
+    echo "WARNING: File ${file} does not exist or is empty"
     continue
   fi
 
@@ -42,14 +46,14 @@ for file in $FILES; do
     "${UPLOAD_URL}")
 
   if [ "$?" -ne 0 ]; then
-    echo "ERROR: 'curl' did not return success"
+    echo "ERROR: 'curl' returned error"
     cat $tmp
     rm $tmp
     exit 1
   fi
 
   if [ "$response" -ge 400 ]; then
-    echo "ERROR: Upload was not successful. HTTP status is $response"
+    echo "ERROR: Upload was not successful. HTTP status: $response"
     cat $tmp
     rm $tmp
     exit 1
