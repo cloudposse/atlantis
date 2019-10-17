@@ -60,7 +60,6 @@ for file in "$@"; do
     exit 1
   fi
 
-  jq $tmp .
   rm $tmp
 
 done

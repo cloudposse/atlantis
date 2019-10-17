@@ -1,4 +1,4 @@
-name: Release
+name: 'Build Go binaries and attach them to GitHub Release'
 
 on:
   release:
@@ -10,13 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Install packages
-      - name: Install packages
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ca-certificates git curl jq
-
       # Setup Golang
       - name: 'Setup Golang'
         uses: actions/setup-go@v1
@@ -41,8 +34,6 @@ jobs:
           GO111MODULE: off
           CGO_ENABLED: 0
         run: |
-          export GOBIN=$GOPATH/bin
-          export PATH=$PATH:$GOBIN
           .github/workflows/build-binaries.sh release
           ls -l release/
 
