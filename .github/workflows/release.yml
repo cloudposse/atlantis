@@ -38,11 +38,11 @@ jobs:
         # https://laszlo.cloud/setting-gopath-in-github-actions-revisited
         env:
           GOPATH: ${{ runner.workspace }}
-          GOBIN: $GOPATH/bin
-          PATH: $PATH:$GOBIN
           GO111MODULE: off
           CGO_ENABLED: 0
         run: |
+          export GOBIN=$GOPATH/bin
+          export PATH=$PATH:$GOBIN
           .github/workflows/build-binaries.sh release
           ls -l release/
 
