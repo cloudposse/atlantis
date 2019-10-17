@@ -1,8 +1,5 @@
 #!/bin/bash
 
-apt-get update
-apt-get install --yes curl jq
-
 if [[ -z "$GITHUB_TOKEN" ]]; then
   echo "Set GITHUB_TOKEN env variable"
   exit 1

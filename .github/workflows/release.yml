@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Install packages
+      - name: Install packages
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install --yes ca-certificates git curl jq
+
       # Setup Golang
       - name: 'Setup Golang'
         uses: actions/setup-go@v1
