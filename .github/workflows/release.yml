@@ -14,7 +14,6 @@ jobs:
       - name: Install packages
         shell: bash
         run: |
-          apt-get update
           apt-get install --yes ca-certificates git curl jq
 
       # Setup Golang
