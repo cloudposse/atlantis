@@ -1,5 +1,8 @@
 #!/bin/bash
 
+apt-get update
+apt-get install --yes curl jq
+
 if [[ -z "$GITHUB_TOKEN" ]]; then
   echo "Set GITHUB_TOKEN env variable"
   exit 1
@@ -32,7 +35,8 @@ for file in "$@"; do
     continue
   fi
 
-  UPLOAD_URL="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${file}"
+  FILENAME=$(basename "${file}")
+  UPLOAD_URL="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${FILENAME}"
   tmp=$(mktemp)
 
   response=$(curl \
@@ -59,7 +63,7 @@ for file in "$@"; do
     exit 1
   fi
 
-  cat $tmp | jq .
+  jq $tmp .
   rm $tmp
 
 done
