@@ -14,7 +14,8 @@ jobs:
       - name: Install packages
         shell: bash
         run: |
-          apt-get install --yes ca-certificates git curl jq
+          sudo apt-get update
+          sudo apt-get install --yes ca-certificates git curl jq
 
       # Setup Golang
       - name: 'Setup Golang'
