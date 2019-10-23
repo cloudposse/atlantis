@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
         with:
-          path: ${{ runner.workspace }}/src/github.com/runatlantis/atlantis
+          path: ./src/github.com/runatlantis/atlantis
 
       # Build binaries
       - name: 'Build binaries'
