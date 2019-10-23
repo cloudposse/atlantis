@@ -10,28 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the branch (into `runatlantis` path since this fork uses `runatlantis` Go imports)
       - name: Checkout
         uses: actions/checkout@v1
-        with:
-          path: ./src/github.com/runatlantis/atlantis
 
       # Build binaries
       - name: 'Build binaries'
         uses: cloudposse/actions/go/build-go-binaries@add-actions
-        # https://github.com/mvdan/github-actions-golang#how-do-i-set-up-a-gopath-build
-        # https://help.github.com/en/articles/virtual-environments-for-github-actions
-        # https://laszlo.cloud/setting-gopath-in-github-actions
-        # https://laszlo.cloud/setting-gopath-in-github-actions-revisited
         env:
           GOPATH: ${{ github.workspace }}
           GOX_OSARCH: windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64
           INPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis
-          OUTPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis/release/atlantis_
+          OUTPUT_PATH: ${{ github.workspace }}/release/atlantis_
 
       # Attach binaries to GitHub Release
       - name: 'Attach binaries to GitHub Release'
         uses: cloudposse/actions/github/attach-binaries-to-release@add-actions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis/release/atlantis_*
+          INPUT_PATH: ${{ github.workspace }}/release/atlantis_*
