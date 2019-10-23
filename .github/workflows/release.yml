@@ -10,12 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Setup Golang
-      - name: 'Setup Golang'
-        uses: actions/setup-go@v1
-        with:
-          go-version: '1.13.1'
-
       # Checkout the branch (into `runatlantis` path since this fork uses `runatlantis` Go imports)
       - name: Checkout
         uses: actions/checkout@v1
@@ -24,25 +18,18 @@ jobs:
 
       # Build binaries
       - name: 'Build binaries'
-        shell: bash
+        uses: cloudposse/actions/go/build-go-binaries@add-actions
         # https://github.com/mvdan/github-actions-golang#how-do-i-set-up-a-gopath-build
         # https://help.github.com/en/articles/virtual-environments-for-github-actions
         # https://laszlo.cloud/setting-gopath-in-github-actions
         # https://laszlo.cloud/setting-gopath-in-github-actions-revisited
         env:
           GOPATH: ${{ runner.workspace }}
-          GO111MODULE: off
-          CGO_ENABLED: 0
-        run: |
-          export GOBIN=$GOPATH/bin
-          export PATH=$PATH:$GOBIN
-          .github/workflows/build-binaries.sh release
-          ls -l release/
+          OUTPUT_PATH: release/atlantis_
 
       # Attach binaries to GitHub Release
       - name: 'Attach binaries to GitHub Release'
-        shell: bash
-        run: |
-          .github/workflows/upload-binaries.sh release/*
+        uses: cloudposse/actions/github/attach-binaries-to-release@add-actions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PATH: release/*
