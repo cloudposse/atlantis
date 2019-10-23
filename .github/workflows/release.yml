@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
         with:
-          path: ${GITHUB_WORKSPACE}/src/github.com/runatlantis/atlantis
+          path: ${{ github.workspace }}/src/github.com/runatlantis/atlantis
 
       # Build binaries
       - name: 'Build binaries'
@@ -24,14 +24,14 @@ jobs:
         # https://laszlo.cloud/setting-gopath-in-github-actions
         # https://laszlo.cloud/setting-gopath-in-github-actions-revisited
         env:
-          GOPATH: ${GITHUB_WORKSPACE}
+          GOPATH: ${{ github.workspace }}
           GOX_OSARCH: windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64
-          INPUT_PATH: ${GITHUB_WORKSPACE}/src/github.com/runatlantis/atlantis
-          OUTPUT_PATH: ${GITHUB_WORKSPACE}/src/github.com/runatlantis/atlantis/release/atlantis_
+          INPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis
+          OUTPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis/release/atlantis_
 
       # Attach binaries to GitHub Release
       - name: 'Attach binaries to GitHub Release'
         uses: cloudposse/actions/github/attach-binaries-to-release@add-actions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_PATH: ${GITHUB_WORKSPACE}/src/github.com/runatlantis/atlantis/release/*
+          INPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis/release/atlantis_*
