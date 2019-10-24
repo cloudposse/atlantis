@@ -17,9 +17,9 @@ jobs:
       - name: 'Build binaries'
         uses: cloudposse/actions/go/build-go-binaries@add-actions
         env:
-          GOPATH: ${{ github.workspace }}
+          GOPATH: ${{ github.workspace }}/../
           GOX_OSARCH: windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64
-          INPUT_PATH: ${{ github.workspace }}/src/github.com/runatlantis/atlantis
+          WORKING_DIR: ${{ github.workspace }}/../src/github.com/runatlantis/atlantis
           OUTPUT_PATH: ${{ github.workspace }}/release/atlantis_
 
       # Attach binaries to GitHub Release
