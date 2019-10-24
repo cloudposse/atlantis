@@ -15,7 +15,7 @@ jobs:
 
       # Build binaries
       - name: 'Build Go binaries'
-        uses: cloudposse/actions/go/build-go-binaries@add-actions
+        uses: cloudposse/actions/go/build-go-binaries@0.2.0
         env:
           # OSes and architectures for `gox` to build for
           GOX_OSARCH: >-
@@ -45,7 +45,7 @@ jobs:
 
       # Attach binaries to GitHub Release
       - name: 'Attach binaries to GitHub Release'
-        uses: cloudposse/actions/github/attach-binaries-to-release@add-actions
+        uses: cloudposse/actions/github/attach-binaries-to-release@0.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_PATH: ${{ github.workspace }}/release/atlantis_*
