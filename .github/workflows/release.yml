@@ -10,17 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: 'Checkout'
         uses: actions/checkout@v1
 
       # Build binaries
-      - name: 'Build binaries'
+      - name: 'Build Go binaries'
         uses: cloudposse/actions/go/build-go-binaries@add-actions
         env:
-          GOPATH: ${{ github.workspace }}/../
-          GOX_OSARCH: windows/386 windows/amd64 freebsd/arm netbsd/386 netbsd/amd64 netbsd/arm linux/s390x linux/arm darwin/386 darwin/amd64 linux/386 linux/amd64 freebsd/amd64 freebsd/386 openbsd/386 openbsd/amd64
-          WORKING_DIR: ${{ github.workspace }}/../src/github.com/runatlantis/atlantis
+          # OSes and architectures for `gox` to build for
+          GOX_OSARCH: >-
+            windows/386
+            windows/amd64
+            freebsd/arm
+            netbsd/386
+            netbsd/amd64
+            netbsd/arm
+            linux/s390x
+            linux/arm
+            darwin/386
+            darwin/amd64
+            linux/386
+            linux/amd64
+            freebsd/amd64
+            freebsd/386
+            openbsd/386
+            openbsd/amd64
+          # The action runs in a Docker container.
+          # Inside the Docker container, the current repo will be available at `github.workspace` path.
           OUTPUT_PATH: ${{ github.workspace }}/release/atlantis_
+          # Since this fork of atlantis uses `runatlantis/atlantis` Go imports, we provide WORKING_DIR to the action.
+          # The action will copy the current repo into WORKING_DIR, which has GOPATH structure.
+          WORKING_DIR: ${{ github.workspace }}/../src/github.com/runatlantis/atlantis
+          GOPATH: ${{ github.workspace }}/../
 
       # Attach binaries to GitHub Release
       - name: 'Attach binaries to GitHub Release'
