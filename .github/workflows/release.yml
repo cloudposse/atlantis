@@ -1,4 +1,4 @@
-name: 'Build Go binaries and attach them to GitHub Release'
+name: 'Build Go binaries and attach to GitHub Release'
 
 on:
   release:
@@ -6,16 +6,17 @@ on:
 
 jobs:
   release:
-    name: 'Build Go binaries and attach them to GitHub Release'
+    name: 'Build Go binaries and attach to GitHub Release'
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout the repo
       - name: 'Checkout'
         uses: actions/checkout@v1
 
-      # Build binaries
+      # Build Go binaries
       - name: 'Build Go binaries'
-        uses: cloudposse/actions/go/build-go-binaries@0.2.0
+        uses: cloudposse/actions/go/build@0.2.0
         env:
           # OSes and architectures for `gox` to build for
           GOX_OSARCH: >-
@@ -43,9 +44,9 @@ jobs:
           WORKING_DIR: ${{ github.workspace }}/../src/github.com/runatlantis/atlantis
           GOPATH: ${{ github.workspace }}/../
 
-      # Attach binaries to GitHub Release
-      - name: 'Attach binaries to GitHub Release'
-        uses: cloudposse/actions/github/attach-binaries-to-release@0.2.0
+      # Attach Go binaries to GitHub Release
+      - name: 'Attach Go binaries to GitHub Release'
+        uses: cloudposse/actions/github/release-assets@0.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INPUT_PATH: ${{ github.workspace }}/release/atlantis_*
